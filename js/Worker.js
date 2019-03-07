@@ -230,55 +230,94 @@ var analyzeModel = function() {
 
 
 var parse = function(text) {
-    var slices = {}
-    var extrudeRelative = false;
-    var totalExtruded = 0
+    // machine state
+    var state = {
+        X: 0, Y: 0, Z: 0,
+        extrudeRelative: false,
+        dcExtrude: false,
+        speed: 0,
+        totalExtruded: 0,
+        seconds: 0
+    };
+    // record steps
+    var steps = [];
+    var step;
+    function addStep() {
+        if(step)
+            console.log('step ' + step.Z + ' gcode=' + step.gcode.length + ' moves=' + step.moves.length);
+        step = steps[steps.push({ Z: state.Z, gcode: [], moves: [] }) - 1];
+    }
+    addStep();
     // do text by lines
     text.split('\n').forEach(function(line) {
-        cmd = line.split(/[\(;]/, 1)[0].toUpperCase();
-        // move commands
-        if( /^(?:G0|G1|G28|G92)\b/.test(cmd) ) {
+        line = line.trim();
+        step.gcode.push(line);
+        var cmd = line.split(/[\(;]/, 1)[0].trim().toUpperCase();
+        // move/set commands
+        if(/^(?:G0|G1|G92)\b/.test(cmd)) {
             // get all values
             var vals = {}
             cmd.split(/\s+/).slice(1).forEach(function(val) {
                 vals[val[0]] = Number(val.slice(1));
-            })
-            // check extrusion/retraction
-            var extruded = vals.E > 0 ? (extrudedRelative ? vals[e] : vals[e] - totalExtruded) : 0;
-            if( vals.E < 0 ) {
-
+            });
+            // G92 just sets positions; does not move
+            if(/^G92/.test(cmd)) {
+                // warn if setting any value other than E
+                if(Object.keys(vals).some(function(k) { return k != "E" }))
+                    console.warn("sets val other than E: " + cmd);
+                // warn if setting E when not extrudeRelative
+                if(!state.extrudeRelative && 'E' in vals)
+                    console.warn("setting E with non-relative extrusion: " + cmd);
+                return;
             }
-
-            "abce".forEach(function(e) {
-                if( vals[e] ) {
-                    extruded = extrudedRelative ? extruded + vals[e] : vals[e];
-                    
-
-                    prev_extrude.abs = numSlice - (extrudeRelative ? 0 : prev_extrude[extruder]);
-                    prev_extrude[extruder] = numSlice;
-                    
-                    extrude = prev_extrude.abs > 0;
-                    if(prev_extrude.abs < 0) {
-                        prevRetract[extruder] = -1;
-                        retract = -1;
-                    }
-                    else if(prev_extrude.abs == 0) {
-                        retract = 0;
-                    } else if(prev_extrude.abs > 0 && prevRetract[extruder] < 0) {
-                        prevRetract[extruder] = 0;
-                        retract = 1;
-                    } else {
-                        retract = 0;
-                    }
-                
-
-                }
-            })
-            
+            // check movement and extrusion
+            var moved = { X: "X" in vals ? vals.X - state.X : 0, Y: "Y" in vals ? vals.Y - state.Y : 0, Z: "Z" in vals ? vals.Z - state.Z : 0 }
+            var extruded = vals.E ? (state.extrudeRelative ? vals.E : vals.E - state.totalExtruded) : 0;
+            if(!extruded && state.dcExtrude)
+                extruded = Math.sqrt(moved.X * moved.X + moved.Y * moved.Y);
+            // update step starting point if we haven't extruded yet
+            if(!step.moves.length) {
+                step.X = state.X;
+                step.Y = state.Y;
+            }
+            // update state
+            if(vals.X) state.X = vals.X;
+            if(vals.Y) state.Y = vals.Y;
+            if(vals.Z) state.Z = vals.Z;
+            if(vals.F) state.speed = vals.F;
+            if(extruded > 0)
+                state.totalExtruded += extruded;
+            if(extruded < 0) {
+                // negative extrusion ends a step
+                addStep();
+            } else if(extruded > 0) {
+                if( state.Z != step.Z ) 
+                    console.warn('step '+step.Z+' extruding at '+state.Z);
+                step.moves.push({ x: state.X, y: state.Y, e: extruded });
+            }
         }
-    })
+        // misc commands
+        else if(/^M82|G90/i.test(cmd)) {
+            state.extrudeRelative = false;
+        } else if(/^M83|G81/i.test(cmd)) {
+            state.extrudeRelative = true;
+        } else if(/^M101/i.test(cmd)) {
+            state.dcExtrude = true;
+        } else if(/^M103/i.test(cmd)) {
+            state.dcExtrude = false;
+            // things to worry about
+        } else if(/^G91/i.test(cmd)) {
+            console.log("worry: " + line);
+        }
+    });
+    // analyze
+    // steps.forEach(function(step) {
+    //     console.log(`z${step.z} gcode:${gcode.length} moves:${moves.length}`);
+    // });
+    console.log("end state: " + JSON.stringify(state));
     //self.postMessage({ cmd: "returnModel", msg: {} });
 }
+
 
 var doParse = function() {
     var argChar;
@@ -340,7 +379,7 @@ var doParse = function() {
                         var numSlice = Number(args[j].slice(1)).toFixed(6);
                         prev_extrude.abs = numSlice - (extrudeRelative ? 0 : prev_extrude[extruder]);
                         prev_extrude[extruder] = numSlice;
-                        
+
                         extrude = prev_extrude.abs > 0;
                         if(prev_extrude.abs < 0) {
                             prevRetract[extruder] = -1;
@@ -379,7 +418,7 @@ var doParse = function() {
             dcExtrude = true;
         } else if(/^M103/i.test(gcode[i])) {
             dcExtrude = false;
-        // G92 set position
+            // G92 set position
         } else if(/^G92/i.test(gcode[i])) {
             var args = gcode[i].split(/\s/);
             for(var j = 0; j < args.length; j++) {
@@ -451,7 +490,7 @@ var doParse = function() {
             if(!model[layer]) model[layer] = [];
             model[layer][model[layer].length] = { x: Number(x), y: Number(y), z: Number(z), extrude: extrude, retract: Number(retract), noMove: false, extrusion: (extrude || retract) ? Number(prev_extrude.abs) : 0, extruder: extruder, prevX: Number(prevX), prevY: Number(prevY), prevZ: Number(prevZ), speed: lastF, gcodeLine: Number(i) };
         }
-        if( typeof (sendLayer) !== "undefined") {
+        if(typeof (sendLayer) !== "undefined") {
             if(false && i - lastSend > gcode.length * 0.02 && sendMultiLayer.length != 0) {
                 lastSend = i;
                 sendMultiLayerToParent(sendMultiLayer, sendMultiLayerZ, i / gcode.length * 100);
@@ -510,16 +549,16 @@ onmessage = function(e) {
     // for some reason firefox doesn't garbage collect when something inside closures is deleted, so we delete and recreate whole object each time
     switch(data.cmd) {
         case 'parse':
-            parse(data.msg)
+            parse(data.msg);
             break;
         case 'parseGCode':
-            parseGCode(data.msg);
+            //parseGCode(data.msg);
             break;
         case 'setOption':
-            setOption(data.msg);
+            //setOption(data.msg);
             break;
         case 'analyzeModel':
-            runAnalyze(data.msg);
+            //runAnalyze(data.msg);
             break;
         default:
             self.postMessage('Unknown command: ' + data.msg);
