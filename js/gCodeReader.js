@@ -6,6 +6,9 @@
 
 GCODE.gCodeReader = (function() {
     // ***** PRIVATE ******
+    // MGD
+    var steps, state;
+    // prev
     var gcode, lines;
     var z_heights = {};
     var model = [];
@@ -170,10 +173,12 @@ GCODE.gCodeReader = (function() {
     // ***** PUBLIC *******
     return {
         loadFile: function(reader) {
-            model = [];
-            z_heights = [];
             // MGD TEST
             GCODE.ui.worker.postMessage({ cmd: "parse", msg: reader.target.result });
+        },
+        xloadFile: function(reader) {
+            model = [];
+            z_heights = [];
             detectSlicer(reader.target.result);
             lines = reader.target.result.split(/\n/);
             reader.target.result = null;

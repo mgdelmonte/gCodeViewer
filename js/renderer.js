@@ -1,23 +1,10 @@
-/**
- * User: hudbrog (hudbrog@gmail.com)
- * Date: 10/20/12
- * Time: 1:36 PM
- * To change this template use File | Settings | File Templates.
- */
-
-
-GCODE.renderer = (function() {
+GCODE.xrenderer = (function() {
     // ***** PRIVATE ******
     var canvas;
     var ctx;
     var zoomFactor = 3, zoomFactorDelta = 0.4;
     var gridSizeX = 200, gridSizeY = 200, gridStep = 10;
     var ctxHeight, ctxWidth;
-    var prevX = 0, prevY = 0;
-
-    //    var colorGrid="#bbbbbb", colorLine="#000000";
-    var sliderHor, sliderVer;
-    var layerNumStore, progressStore = { from: 0, to: -1 };
     var lastX, lastY;
     var dragStart, dragged;
     var scaleFactor = 1.1;
@@ -48,29 +35,6 @@ GCODE.renderer = (function() {
     };
 
     var offsetModelX = 0, offsetModelY = 0;
-    var speeds = [];
-    var speedsByLayer = {};
-    var volSpeeds = [];
-    var volSpeedsByLayer = {};
-    var extrusionSpeeds = [];
-    var extrusionSpeedsByLayer = {};
-
-
-    var reRender = function() {
-        var gCodeOpts = GCODE.gCodeReader.getOptions();
-        var p1 = ctx.transformedPoint(0, 0);
-        var p2 = ctx.transformedPoint(canvas.width, canvas.height);
-        ctx.clearRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
-        drawGrid();
-        if(renderOptions['alpha']) { ctx.globalAlpha = 0.6; }
-        else { ctx.globalAlpha = 1; }
-        if(renderOptions['actualWidth']) { renderOptions['extrusionWidth'] = gCodeOpts['filamentDia'] * gCodeOpts['wh'] / zoomFactor; }
-        else { renderOptions['extrusionWidth'] = gCodeOpts['filamentDia'] * gCodeOpts['wh'] / zoomFactor / 2; }
-        if(renderOptions['showNextLayer'] && layerNumStore < model.length - 1) {
-            drawLayer(layerNumStore + 1, 0, GCODE.renderer.getLayerNumSegments(layerNumStore + 1), true);
-        }
-        drawLayer(layerNumStore, progressStore.from, progressStore.to);
-    };
 
     function trackTransforms(ctx) {
         var svg = document.createElementNS("http://www.w3.org/2000/svg", 'svg');
@@ -131,13 +95,8 @@ GCODE.renderer = (function() {
 
     var startCanvas = function() {
         canvas = document.getElementById('canvas');
-
-        // Проверяем понимает ли браузер canvas
-        if(!canvas.getContext) {
-            throw "exception";
-        }
-
-        ctx = canvas.getContext('2d'); // Получаем 2D контекст
+        if(!canvas.getContext) throw "exception";
+        ctx = canvas.getContext('2d');
         ctxHeight = canvas.height;
         ctxWidth = canvas.width;
         lastX = ctxWidth / 2;
@@ -145,7 +104,6 @@ GCODE.renderer = (function() {
         ctx.lineWidth = 2;
         ctx.lineCap = 'round';
         trackTransforms(ctx);
-
         canvas.addEventListener('mousedown', function(evt) {
             document.body.style.mozUserSelect = document.body.style.webkitUserSelect = document.body.style.userSelect = 'none';
             lastX = evt.offsetX || (evt.pageX - canvas.offsetLeft);
@@ -160,7 +118,7 @@ GCODE.renderer = (function() {
             if(dragStart) {
                 var pt = ctx.transformedPoint(lastX, lastY);
                 ctx.translate(pt.x - dragStart.x, pt.y - dragStart.y);
-                reRender();
+                public.render();
             }
         }, false);
         canvas.addEventListener('mouseup', function(evt) {
@@ -173,7 +131,7 @@ GCODE.renderer = (function() {
             var factor = Math.pow(scaleFactor, clicks);
             ctx.scale(factor, factor);
             ctx.translate(-pt.x, -pt.y);
-            reRender();
+            public.render();
         };
         var handleScroll = function(evt) {
             var delta;
@@ -184,281 +142,95 @@ GCODE.renderer = (function() {
         };
         canvas.addEventListener('DOMMouseScroll', handleScroll, false);
         canvas.addEventListener('mousewheel', handleScroll, false);
-
     };
 
+
     var drawGrid = function() {
-        var i;
-        ctx.strokeStyle = renderOptions["colorGrid"];
+        ctx.strokeStyle = renderOptions.colorGrid;
         ctx.lineWidth = 1;
         var offsetX = 0, offsetY = 0;
-        if(renderOptions["moveModel"]) {
+        if(renderOptions.moveModel) {
             offsetX = offsetModelX;
             offsetY = offsetModelY;
         }
-
         ctx.beginPath();
-        for(i = 0; i <= gridSizeX; i += gridStep) {
+        for(var i = 0; i <= gridSizeX; i += gridStep) {
             ctx.moveTo(i * zoomFactor - offsetX, 0 - offsetY);
             ctx.lineTo(i * zoomFactor - offsetX, -gridSizeY * zoomFactor - offsetY);
         }
         ctx.stroke();
-
         ctx.beginPath();
-        for(i = 0; i <= gridSizeY; i += gridStep) {
+        for(var i = 0; i <= gridSizeY; i += gridStep) {
             ctx.moveTo(0 - offsetX, -i * zoomFactor - offsetY);
             ctx.lineTo(gridSizeX * zoomFactor - offsetX, -i * zoomFactor - offsetY);
         }
         ctx.stroke();
-
     };
-
-    var drawLayer = function(layerNum, fromProgress, toProgress, isNextLayer) {
-        var i, speedIndex = 0, prevZ = 0;
-        isNextLayer = typeof isNextLayer !== 'undefined' ? isNextLayer : false;
-        if(!isNextLayer) {
-            layerNumStore = layerNum;
-            progressStore = { from: fromProgress, to: toProgress };
-        }
-        if(!model || !model[layerNum]) return;
-
-        var cmds = model[layerNum];
-        var x, y;
-
-        //        if(toProgress === -1){
-        //            toProgress=cmds.length;
-        //        }
-
-        if(fromProgress > 0) {
-            prevX = cmds[fromProgress - 1].x * zoomFactor;
-            prevY = -cmds[fromProgress - 1].y * zoomFactor;
-        } else if(fromProgress === 0 && layerNum == 0) {
-            if(model[0] && typeof (model[0].x) !== 'undefined' && typeof (model[0].y) !== 'undefined') {
-                prevX = model[0].x * zoomFactor;
-                prevY = -model[0].y * zoomFactor;
-            } else {
-                prevX = 0;
-                prevY = 0;
-            }
-        } else if(typeof (cmds[0].prevX) !== 'undefined' && typeof (cmds[0].prevY) !== 'undefined') {
-            prevX = cmds[0].prevX * zoomFactor;
-            prevY = -cmds[0].prevY * zoomFactor;
-        } else {
-            if(model[layerNum - 1]) {
-                prevX = undefined;
-                prevY = undefined;
-                for(i = model[layerNum - 1].length - 1; i >= 0; i--) {
-                    if(typeof (prevX) === 'undefined' && model[layerNum - 1][i].x !== undefined) prevX = model[layerNum - 1][i].x * zoomFactor;
-                    if(typeof (prevY) === 'undefined' && model[layerNum - 1][i].y !== undefined) prevY = -model[layerNum - 1][i].y * zoomFactor;
-                }
-                if(typeof (prevX) === 'undefined') prevX = 0;
-                if(typeof (prevY) === 'undefined') prevY = 0;
-            } else {
-                prevX = 0;
-                prevY = 0;
-            }
-        }
-
-        prevZ = GCODE.renderer.getZ(layerNum);
-
-        //        ctx.strokeStyle = renderOptions["colorLine"];
-        for(i = fromProgress; i <= toProgress; i++) {
-            ctx.lineWidth = 1;
-
-            if(typeof (cmds[i]) === 'undefined') continue;
-
-            if(typeof (cmds[i].prevX) !== 'undefined' && typeof (cmds[i].prevY) !== 'undefined') {
-                prevX = cmds[i].prevX * zoomFactor;
-                prevY = -cmds[i].prevY * zoomFactor;
-            }
-            //                console.log(cmds[i]);
-            if(typeof (cmds[i].x) === 'undefined' || isNaN(cmds[i].x)) x = prevX / zoomFactor;
-            else x = cmds[i].x;
-            if(typeof (cmds[i].y) === 'undefined' || isNaN(cmds[i].y)) y = prevY / zoomFactor;
-            else y = -cmds[i].y;
-            if(renderOptions["differentiateColors"] && !renderOptions['showNextLayer'] && !renderOptions['renderAnalysis']) {
-                //                if(speedsByLayer['extrude'][prevZ]){
-                if(renderOptions['speedDisplayType'] === displayType.speed) {
-                    speedIndex = speeds['extrude'].indexOf(cmds[i].speed);
-                } else if(renderOptions['speedDisplayType'] === displayType.expermm) {
-                    speedIndex = volSpeeds.indexOf(cmds[i].volPerMM);
-                } else if(renderOptions['speedDisplayType'] === displayType.volpersec) {
-                    speedIndex = extrusionSpeeds.indexOf((cmds[i].volPerMM * cmds[i].speed / 60).toFixed(3));
-                } else {
-                    speedIndex = 0;
-                }
-                //                    speedIndex = GCODE.ui.ArrayIndexOf(speedsByLayer['extrude'][prevZ], function(obj) {return obj.speed === cmds[i].speed;});
-                //                } else {
-                //                    speedIndex = -1;
-                //                }
-                if(speedIndex === -1) {
-                    speedIndex = 0;
-                } else if(speedIndex > renderOptions["colorLineLen"] - 1) {
-                    speedIndex = speedIndex % (renderOptions["colorLineLen"] - 1);
-                    //                console.log("Too much colors");
-                }
-            } else if(renderOptions['showNextLayer'] && isNextLayer) {
-                speedIndex = 3;
-            } else if(renderOptions['renderErrors']) {
-                if(cmds[i].errType === 2) {
-                    speedIndex = 9;
-                    //                    console.log("l: " + layerNum + " c: " + i);
-                } else if(cmds[i].errType === 1) {
-                    speedIndex = 10;
-                } else {
-                    speedIndex = 0;
-                }
-            } else if(renderOptions['renderAnalysis']) {
-                //                if(cmds[i].errType === 2){
-                //                    speedIndex=-1;
-                //                }else{
-                //                    speedIndex=0;
-                //                }
-                if(layerNum !== 0) speedIndex = -1;
-                else speedIndex = 0;
-            } else {
-                speedIndex = 0;
-            }
-
-
-            if(!cmds[i].extrude && !cmds[i].noMove) {
-                //                ctx.stroke();
-                if(cmds[i].retract == -1) {
-                    if(renderOptions["showRetracts"]) {
-
-                        ctx.strokeStyle = renderOptions["colorRetract"];
-                        ctx.fillStyle = renderOptions["colorRetract"];
-                        ctx.beginPath();
-                        ctx.arc(prevX, prevY, renderOptions["sizeRetractSpot"], 0, Math.PI * 2, true);
-                        ctx.stroke();
-                        ctx.fill();
-                    }
-                }
-                if(renderOptions["showMoves"]) {
-                    ctx.strokeStyle = renderOptions["colorMove"];
-                    ctx.beginPath();
-                    ctx.moveTo(prevX, prevY);
-                    ctx.lineTo(x * zoomFactor, y * zoomFactor);
-                    ctx.stroke();
-                }
-                //                ctx.strokeStyle = renderOptions["colorLine"][0];
-                //                ctx.beginPath();
-                //                console.log("moveto: "+cmds[i].x+":"+cmds[i].y)
-                //                ctx.moveTo(cmds[i].x*zoomFactor,cmds[i].y*zoomFactor);
-            }
-            else if(cmds[i].extrude) {
-                if(cmds[i].retract == 0) {
-                    if(speedIndex >= 0) {
-                        ctx.strokeStyle = renderOptions["colorLine"][speedIndex];
-                    } else if(speedIndex === -1) {
-                        var val = parseInt(cmds[i].errLevelB).toString(16);
-                        //                        var val = '8A';
-                        var crB = "#" + "00".substr(0, 2 - val.length) + val + '0000';
-                        val = parseInt(cmds[i].errLevelE).toString(16);
-                        var crE = "#" + "00".substr(0, 2 - val.length) + val + '0000';
-                        //                        if(renderOptions['showMoves'])console.log(cr);
-                        var gradient = ctx.createLinearGradient(prevX, prevY, x * zoomFactor, y * zoomFactor);
-                        if(cmds[i].errType === 1) {
-                            var limit = (1 - cmds[i].errDelimiter);
-                            if(limit >= 0.99) limit = 0.99;
-                            gradient.addColorStop(0, "#000000");
-                            gradient.addColorStop(limit, "#000000");
-                            gradient.addColorStop(limit + 0.01, crE);
-                            gradient.addColorStop(1, crE);
-                        } else if(cmds[i].errType === 2) {
-                            gradient.addColorStop(0, crB);
-                            var limit = cmds[i].errDelimiter;
-                            if(limit >= 0.99) limit = 0.99;
-                            gradient.addColorStop(limit, crB);
-                            gradient.addColorStop(limit + 0.01, "#000000");
-                            gradient.addColorStop(1, "#000000");
-                        } else {
-                            gradient.addColorStop(0, crB);
-                            gradient.addColorStop(1, crE);
-                        }
-                        ctx.strokeStyle = gradient;
-                    }
-                    ctx.lineWidth = renderOptions['extrusionWidth'];
-                    ctx.beginPath();
-                    ctx.moveTo(prevX, prevY);
-                    ctx.lineTo(x * zoomFactor, y * zoomFactor);
-                    ctx.stroke();
-                } else {
-                    if(renderOptions["showRetracts"]) {
-                        //                        ctx.stroke();
-                        ctx.strokeStyle = renderOptions["colorRestart"];
-                        ctx.fillStyle = renderOptions["colorRestart"];
-                        ctx.beginPath();
-                        ctx.arc(prevX, prevY, renderOptions["sizeRetractSpot"], 0, Math.PI * 2, true);
-                        ctx.stroke();
-                        ctx.fill();
-                        //                        ctx.strokeStyle = renderOptions["colorLine"][0];
-                        //                        ctx.beginPath();
-                    }
-                }
-            }
-            prevX = x * zoomFactor;
-            prevY = y * zoomFactor;
-        }
-        ctx.stroke();
-    };
-
 
     // ***** PUBLIC *******
-    return {
+    var public = {
         init: function() {
+            if( initialized ) return;
             startCanvas();
-            initialized = true;
             ctx.translate((canvas.width - gridSizeX * zoomFactor) / 2, gridSizeY * zoomFactor + (canvas.height - gridSizeY * zoomFactor) / 2);
+            initialized = true;
+        },
+        render: function() {
+            this.renderSlice(this.sliceNum);
         },
         setOption: function(options) {
             for(var opt in options) {
                 if(options.hasOwnProperty(opt)) {
                     renderOptions[opt] = options[opt];
-                    //                    console.log("Got a set option call: " + opt + " == " + options[opt]);
                 }
             };
-
-            if(initialized) reRender();
+            if(initialized) this.render();
         },
         getOptions: function() {
             return renderOptions;
-        },
-        debugGetModel: function() {
-            return model;
-        },
-        render: function(layerNum, fromProgress, toProgress) {
-            var gCodeOpts = GCODE.gCodeReader.getOptions();
-            if(!initialized) this.init();
-            if(!model) {
-                drawGrid();
-            } else {
-                if(layerNum < model.length) {
-                    var p1 = ctx.transformedPoint(0, 0);
-                    var p2 = ctx.transformedPoint(canvas.width, canvas.height);
-                    ctx.clearRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
-                    drawGrid();
-                    if(renderOptions['alpha']) { ctx.globalAlpha = 0.6; }
-                    else { ctx.globalAlpha = 1; }
-                    if(renderOptions['actualWidth']) { renderOptions['extrusionWidth'] = gCodeOpts['filamentDia'] * gCodeOpts['wh'] / zoomFactor; }
-                    else { renderOptions['extrusionWidth'] = gCodeOpts['filamentDia'] * gCodeOpts['wh'] / zoomFactor / 2; }
-                    if(renderOptions['showNextLayer'] && layerNum < model.length - 1) {
-                        drawLayer(layerNum + 1, 0, this.getLayerNumSegments(layerNum + 1), true);
-                    }
-                    drawLayer(layerNum, fromProgress, toProgress);
-                } else {
-                    console.log("Got request to render non-existent layer!!");
-                }
-            }
-        },
-        getModelNumLayers: function() {
-            return model ? model.length : 1;
         },
         getLayerNumSegments: function(layer) {
             if(model) {
                 return model[layer] ? model[layer].length : 1;
             } else {
                 return 1;
+            }
+        },
+        // MGD
+        renderSlice: function(sliceNum) {
+            this.init();
+            if( !this.state ) return;
+            var state = this.state;
+            offsetModelX = (gridSizeX / 2 - (state.min.x + state.size.x / 2)) * zoomFactor;
+            offsetModelY = ((state.min.y + state.size.y / 2) - gridSizeY / 2) * zoomFactor;
+            ctx.translate(offsetModelX, offsetModelY);
+            var scaleF = state.size.x  > state.size.y ? canvas.width / state.size.x / zoomFactor : canvas.height / state.size.y / zoomFactor;
+            var pt = ctx.transformedPoint(canvas.width / 2, canvas.height / 2);
+            var transform = ctx.getTransform();
+            var sX = scaleF / transform.a, sY = scaleF / transform.d;
+            ctx.translate(pt.x, pt.y);
+            ctx.scale(0.98 * sX, 0.98 * sY);111
+            ctx.translate(-pt.x, -pt.y);
+            var p1 = ctx.transformedPoint(0, 0);
+            var p2 = ctx.transformedPoint(canvas.width, canvas.height);
+            ctx.clearRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
+            drawGrid();
+            ctx.globalAlpha = renderOptions.alpha ? 0.6 : 1;
+            this.renderSteps(sliceNum, 0, this.slices[sliceNum].length);
+        },
+        renderSteps: function(sliceNum, start, end) {
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = renderOptions.colorLine[0];
+            var slice = this.slices[sliceNum];
+            for(i = start; i < end; i++) {
+                var step = slice[i];
+                ctx.beginPath();
+                ctx.moveTo(step.x * zoomFactor, step.y * zoomFactor);
+                step.moves.forEach(function(m){
+                    // TODO set line width, color, etc. based on extrusion, speed, etc.
+                    ctx.lineTo(m.x * zoomFactor, m.y * zoomFactor);
+                });
+                ctx.stroke();
             }
         },
         doRender: function(mdl, layerNum) {
@@ -490,16 +262,17 @@ GCODE.renderer = (function() {
             //            ctx.scale(scaleF,scaleF);
             this.render(layerNum, 0, model[layerNum].length);
         },
-        getZ: function(layerNum) {
-            if(!model && !model[layerNum]) {
-                return '-1';
-            }
-            var cmds = model[layerNum];
-            for(var i = 0; i < cmds.length; i++) {
-                if(cmds[i].prevZ !== undefined) return cmds[i].prevZ;
-            }
-            return '-1';
+        getZ: function(sliceNum) {
+            return this.slices[sliceNum][0].z;
+            // if(!model && !model[sliceNum]) {
+            //     return '-1';
+            // }
+            // var cmds = model[sliceNum];
+            // for(var i = 0; i < cmds.length; i++) {
+            //     if(cmds[i].prevZ !== undefined) return cmds[i].prevZ;
+            // }
+            // return '-1';
         }
-
-    }
+   };
+   return public;
 }());
