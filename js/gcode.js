@@ -287,7 +287,8 @@ function startCanvas() {
         document.body.style.mozUserSelect = document.body.style.webkitUserSelect = document.body.style.userSelect = 'none';
         lastX = evt.offsetX || (evt.pageX - canvas.offsetLeft);
         lastY = evt.offsetY || (evt.pageY - canvas.offsetTop);
-        dragStart = ctx.transformedPoint(lastX, lastY);
+        dragStart = transformedPoint(lastX, lastY);
+        //console.log("mousedown at ", dragStart);
         dragged = false;
     }, false);
     canvas.addEventListener('mousemove', function(evt) {
@@ -295,8 +296,10 @@ function startCanvas() {
         lastY = evt.offsetY || (evt.pageY - canvas.offsetTop);
         dragged = true;
         if(dragStart) {
-            var pt = ctx.transformedPoint(lastX, lastY);
-            ctx.translate(pt.x - dragStart.x, pt.y - dragStart.y);
+            var pt = transformedPoint(lastX, lastY);
+            //console.log("dragging from ", dragStart, " to ", pt);
+            if( !cameraXform ) cameraXform = svg.createSVGMatrix();
+            cameraXform = cameraXform.translate(pt.x - dragStart.x, pt.y - dragStart.y);
             render();
         }
     }, false);
@@ -304,24 +307,48 @@ function startCanvas() {
         dragStart = null;
         if(!dragged) zoom(evt.shiftKey ? -1 : 1);
     }, false);
-    var zoom = function(clicks) {
-        //var pt = ctx.transformedPoint(lastX, lastY);
-        //ctx.translate(pt.x, pt.y);
-        // scale by 10% per delta
-        if( !cameraXform ) cameraXform = svg.createSVGMatrix();
-        var factor = Math.pow(1.1, clicks);
-        cameraXform = cameraXform.scale(factor);
-        //ctx.translate(-pt.x, -pt.y);
-        render();
-    };
+    // var zoom = function(clicks) {
+    //     //var pt = ctx.transformedPoint(lastX, lastY);
+    //     //ctx.translate(pt.x, pt.y);
+    //     // scale by 10% per delta
+    //     if( !cameraXform ) cameraXform = svg.createSVGMatrix();
+    //     var factor = Math.pow(1.1, clicks);
+    //     cameraXform = cameraXform.scale(factor);
+    //     //ctx.translate(-pt.x, -pt.y);
+    //     render();
+    // };
     var handleScroll = function(evt) {
         var clicks = evt.detail < 0 || evt.wheelDelta > 0 ? 0.4 : -0.4;
-        if(clicks) zoom(clicks);
+        if(clicks) zoom(clicks, evt.x, evt.y);
         return evt.preventDefault() && false;
     };
     canvas.addEventListener('DOMMouseScroll', handleScroll, false);
     canvas.addEventListener('mousewheel', handleScroll, false);
 };
+
+
+function transformedPoint(x, y) {
+    var pt = svg.createSVGPoint();
+    pt.x = x; pt.y = y;
+    var xf = svg.createSVGMatrix();
+    var m = ctx.getTransform();
+    "abcdef".split("").forEach(function(v){ xf[v] = m[v]});
+    return pt.matrixTransform(xf.inverse());
+}
+
+
+function zoom(clicks, x, y) {
+    x = x || canvas.width/2;
+    y = y || canvas.height/2;
+    var pt = transformedPoint(x, y);
+    // scale by 10% per delta
+    if( !cameraXform ) cameraXform = svg.createSVGMatrix();
+    var factor = Math.pow(1.1, clicks);
+    cameraXform = cameraXform.translate(-pt.x, -pt.y).scale(factor).translate(pt.x, pt.y);
+    render();
+}
+
+
 
 function drawCircle(x, y, radius) {
     radius = radius || 3;
@@ -401,7 +428,7 @@ function onResize() {
 
 function drawGrid(cellsize) {
     cellsize = cellsize || 10;
-    var bounds = slices.length ? {l:state.min.x, r:state.max.x, t:state.min.y, b:state.max.y} : {l:0, r:200, t:0, b:200}
+    var bounds = slices.length ? {l:state.min.x, r:state.max.x, t:state.min.y, b:state.max.y} : {l:0, r:canvas.width, t:0, b:canvas.height}
     ctx.strokeStyle = '#bbbbbb';
     ctx.lineWidth = 0.2;
     ctx.beginPath();
