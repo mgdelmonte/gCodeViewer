@@ -147,19 +147,24 @@ function setSliceNum(slicenum, stepnum) {
     if(sliceNum !== slicenum) {
         sliceNum = slicenum;
         stepnum = 0;
-        // show step pills
-        stepPills.html(steps.map(function(s) {
-            var si = stepInfo(s);
-            return pill(si.filament, si.filament < 1 ? "warning" : "");
-        }).join(' '));
     }
     if(stepnum >= 0 && stepnum < steps.length) stepNum = stepnum;
     slider.show().slider('value', slicenum);
     sliderHandle.text(steps[0].z + 'mm');
     $('#deleteStep').attr("disabled", stepNum == 0);
-    //var maxStep = steps.length - 1;
-    //sliderHor.slider({ max: maxStep, values: [0, maxStep] });
     render();
+    // show step pills
+    // stepPills.html(steps.map(function(s) {
+    //     var si = stepInfo(s);
+    //     return pill(si.filament, si.filament < 1 ? "warning" : "");
+    // }).join(' '));
+    stepPills.html(steps.map(function(s,i) {
+        var si = stepInfo(s);
+        var cl = si.filament < 1 ? " label-warning" : "";
+        if( i == stepNum ) cl += " active";
+        return `<a sn=${i} href=# class="label${cl}">${si.filament}</a>`;
+    }).join(' '));
+    stepPills.find('a').not('.active').click(function() { setSliceNum(sliceNum, $(this).attr('sn')); });
     // show slice/step info
     var step = steps[stepNum];
     // TODO omit moveless steps?
