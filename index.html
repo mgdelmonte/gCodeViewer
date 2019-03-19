@@ -30,6 +30,14 @@
     body { overflow: hidden; margin:5px }
     #save { display:none }
     #filename { font-size:8pt; padding-left:3px; }
+    #stepFilter {     
+        font-size: 8pt;
+        width: fit-content;
+        height: 21px;
+        margin: 0;
+        padding: 0;
+        vertical-align: top;
+    }
     #stepPills { white-space: nowrap; }
     #two { position:relative }
     #progress { display:none; width:100% }
@@ -40,7 +48,8 @@
         position:absolute; 
         left:-17px; 
         top:10px; 
-        display:none }
+        display:none 
+    }
     #sliderhandle {
         width: 5em;
         font-size: 8pt;
@@ -50,7 +59,8 @@
         line-height: 1.6em;
         padding-left: 0.2em;
     }
-    a.label.active { border:2px solid blue; }
+    #stepPills a.label { border:2px solid transparent; }
+    #stepPills a.label.active { border:2px solid blue; }
 </style>
 
 <body>
@@ -69,7 +79,10 @@
             <div id="three"></div>
         </div>
         <div class="span8" id="two">
-            <div id="stepPills"></div>
+            <div>
+                <select id=stepFilter><option>All<option>Warnings<option>Deleted</select>
+                <span id="stepPills"></span>
+            </div>
             <canvas id="canvas"></canvas>
             <div id="slider"><div id="sliderhandle" class="ui-slider-handle"></div></div>
         </div>

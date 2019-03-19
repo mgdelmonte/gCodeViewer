@@ -4,6 +4,7 @@ var slices = [];
 var state = {};
 var inOrder = [];
 
+
 function checkCapabilities() {
     var warnings = [];
     var fatal = [];
@@ -58,19 +59,32 @@ function init() {
     });
     //this stops slider reacting to arrow keys, since we do it below manually
     slider.find(".ui-slider-handle").unbind('keydown');
+    //$('body').bind('keydown', 
     window.onkeydown = function(event) {
-        console.log(event.keyCode);
+        if( /^(?:input|textarea)$/i.test(event.target.nodeName) )
+            return;
+        // console.log(event.keyCode);
+        if( event.shiftKey )    
+            return;
+        // ctrl
+        if( event.ctrlKey ) switch(event.keyCode) {
+            case 36: setSliceNum(0); return; // home
+            case 35: setSliceNum(slices.length-1); return; // end
+            default: return;
+        }
+        // normal
         switch(event.keyCode) {
             case 38: setSliceNum(sliceNum + 1); break; // up
             case 40: setSliceNum(sliceNum - 1); break; // down
             case 37: setSliceNum(sliceNum, stepNum - 1); break; // left
             case 39: setSliceNum(sliceNum, stepNum + 1); break; // right
-            case 36: setSliceNum(0, 0); break; // home
-            case 35: setSliceNum(slices.length - 1); break; // end
+            case 36: setSliceNum(sliceNum, 0); break; // home
+            case 35: setSliceNum(sliceNum, slices[sliceNum].length - 1); break; // end
             case 90: case 101: case 12: autozoom(); break // z, 5, numpad 5, numpad 5 in numlock
-            case 46: onDeleteStep(); break; // del
+            case 46: case 8: onDeleteStep(); break; // del, backspace
+            default: return;
         }
-        event.stopPropagation()
+        // event.stopPropagation();
     }
     window.requestAnimationFrame = window.requestAnimationFrame || window.mozRequestAnimationFrame || window.webkitRequestAnimationFrame || window.msRequestAnimationFrame;
     worker = new Worker('js/Worker.js');
@@ -123,7 +137,7 @@ function onDeleteStep(evt) {
         alert("You can't delete the first step in a slice.");
         return;
     }
-    // TODO naive; better is edit slice to be a move
+    // TODO naive; better may be to edit slice to be a move
     slices[sliceNum].splice(stepNum, 1);
     setSliceNum(sliceNum, stepNum-1);
 }
@@ -153,11 +167,6 @@ function setSliceNum(slicenum, stepnum) {
     sliderHandle.text(steps[0].z + 'mm');
     $('#deleteStep').attr("disabled", stepNum == 0);
     render();
-    // show step pills
-    // stepPills.html(steps.map(function(s) {
-    //     var si = stepInfo(s);
-    //     return pill(si.filament, si.filament < 1 ? "warning" : "");
-    // }).join(' '));
     stepPills.html(steps.map(function(s,i) {
         var si = stepInfo(s);
         var cl = si.filament < 1 ? " label-warning" : "";
@@ -506,10 +515,6 @@ function drawSlice(slicenum, stepnum) {
 
 
 function render() {
-    //var p1 = ctx.transformedPoint(0, 0);
-    //var p2 = ctx.transformedPoint(canvas.width, canvas.height);
-    //console.log(p1, p2);
-    //ctx.clearRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
     ctx.resetTransform();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if(zoomXform)
@@ -527,22 +532,4 @@ function render() {
         ctx.setLineDash([]);
     }
     drawSlice(sliceNum, stepNum);
-
-    // if( slices.length == 0 ) return;
-    // var dx = (gridSizeX / 2 - (state.min.x + state.size.x / 2));
-    // var dy = ((state.min.y + state.size.y / 2) - gridSizeY / 2);
-    // ctx.translate(dx, dy);
-    // var scaleF = state.size.x  > state.size.y ? canvas.width / state.size.x : canvas.height / state.size.y;
-    // var pt = ctx.transformedPoint(canvas.width / 2, canvas.height / 2);
-    // var transform = ctx.getTransform();
-    // var sX = scaleF / transform.a, sY = scaleF / transform.d;
-    // ctx.translate(pt.x, pt.y);
-    // ctx.scale(0.98 * sX, 0.98 * sY);
-    // ctx.translate(-pt.x, -pt.y);
-    // var p1 = ctx.transformedPoint(0, 0);
-    // var p2 = ctx.transformedPoint(canvas.width, canvas.height);
-    // ctx.clearRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
-    // //drawGrid();
-    // //ctx.globalAlpha = renderOptions.alpha ? 0.6 : 1;
-    // renderSteps(sliceNum);
 }
