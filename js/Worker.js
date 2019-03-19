@@ -29,9 +29,14 @@ function parse(text) {
     addStep();
     // do text by lines
     var lines = text.split('\n');
+    var time = new Date().getTime();
     lines.forEach(function(line, i) {
-        if(i && !(i % parseInt(lines.length / 100)))
+        //if(i && !(i % parseInt(lines.length / 100)))
+        var t2 = new Date().getTime();
+        if( t2-time > 1000 ) {
             self.postMessage({ cmd: "progress", msg: 100 * i / lines.length });
+            time = t2;
+        }
         line = line.trim();
         step.gcode.push(line);
         var cmd = line.split(/[\(;]/, 1)[0].trim().toLowerCase();
@@ -42,14 +47,16 @@ function parse(text) {
             cmd.split(/\s+/).slice(1).forEach(function(val) {
                 vals[val[0]] = Number(val.slice(1));
             });
+            // invert y axis
+            if( 'y' in vals ) vals.y = -vals.y;
             // G92 just sets positions; does not move
             if(/^G92/i.test(cmd)) {
                 // warn if setting any value other than e
                 if(Object.keys(vals).some(function(k) { return k != "e" }))
                     console.warn("sets val other than e: " + cmd);
                 if("e" in vals) {
-                    // warn if setting e when not extrudeRelative
-                    if(!state.extrudeRelative)
+                    // warn if setting e to any nonzero value when not extrudeRelative
+                    if(!state.extrudeRelative && vals.e != 0)
                         console.warn("setting e with non-relative extrusion: " + cmd);
                     state.e = vals.e;
                 }
@@ -126,5 +133,5 @@ function parse(text) {
     // update state
     state.size = { x: state.max.x-state.min.x, y: state.max.y-state.min.y, z: state.max.z-state.min.z };
     console.log("end state: " + JSON.stringify(state));
-    self.postMessage({ cmd: "finished", msg: { slices: slices, state: state } });
+    self.postMessage({ cmd: "finished", msg: { slices: slices, state: state, inOrder: steps } });
 }
