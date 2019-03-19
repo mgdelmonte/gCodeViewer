@@ -288,7 +288,10 @@ function startCanvas() {
             return xf.call(ctx,a,b,c,d,e,f);
         }
     })();
+    ctx.lineWidth = 1;
     ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'black';
     // resize the canvas to fill parent dynamically
     window.addEventListener('resize', onResize, false);
     // listen for mouse events
@@ -364,6 +367,24 @@ function drawCircle(x, y, radius) {
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, 2*Math.PI);
     ctx.stroke();
+}
+function drawArrow(x1,y1,x2,y2,size) {
+    size = size || 3;
+    var angle = (180/Math.PI)*Math.atan((y2-y1)/(x1-x2));
+    console.log(angle);
+    ctx.save();
+    //ctx.translate(canvas.width/2, canvas.height/2);
+    ctx.translate(-x1, -y1);
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.moveTo(x1+size, y1);
+    ctx.lineTo(x1, y1+size);
+    ctx.lineTo(x1-size, y1)
+    ctx.lineTo(x1+size, y1);
+    ctx.stroke();
+    ctx.restore();
+    //ctx.rotate(-angle);
+    //ctx.translate(x1, y1);
 }
 
 
