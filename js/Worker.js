@@ -24,7 +24,7 @@ function parse(text) {
     var step;
     function addStep() {
         // if(step) console.log(`step ${steps.length} z=${step.z} gcode=${step.gcode.length} moves=${step.moves.length}`);
-        step = steps[steps.push({ gcode: [], moves: [] }) - 1];
+        step = steps[steps.push({ gcode: [], moves: [], filament:0, distance:0 }) - 1];
     }
     addStep();
     // do text by lines
@@ -91,6 +91,8 @@ function parse(text) {
             else if(extruded > 0 || (step.moves.length && xyDistance)) {
                 // note that only non-negative extrusion counts towards total
                 state.totalExtruded += extruded;
+                step.filament += extruded;
+                step.distance += xyDistance;
                 // only positive extrusion affects extents
                 if( extruded > 0 ) {
                     state.min.x = 'x' in state.min ? Math.min(state.min.x, state.x) : state.x;
@@ -120,11 +122,24 @@ function parse(text) {
             console.log("worry: " + line);
         }
     });
-    // steps.forEach(function(step) {
-    //     console.log(`z${step.z} gcode:${gcode.length} moves:${moves.length}`);
-    // index steps by slice
+    // index steps by slice; retain ordering and do some analysis
     var zs = {}
-    steps.forEach(function(s) { 
+    var epilogue = "";
+    steps.forEach(function(s, ix) { 
+        // the final no-move step is not a step; add as epilogue
+        if( !s.moves.length ) {
+            if( ix != steps.length-1 ) {
+                // no moves on anything but the last step is a warning
+                console.warn(`step ${ix+1} of ${steps.length} has no moves`);
+                s.warnings = (s.warnings || []).concat(['step has no moves']);
+            } else {
+                epilogue = s.gcode.join('\n');
+                return;
+            }
+        }
+        if( s.filament < 1 )
+            s.warnings = ['<1mm extruded'];
+        s.ix = ix;
         if(!(s.z in zs)) zs[s.z] = [];
         zs[s.z].push(s);
     });
@@ -133,5 +148,5 @@ function parse(text) {
     // update state
     state.size = { x: state.max.x-state.min.x, y: state.max.y-state.min.y, z: state.max.z-state.min.z };
     console.log("end state: " + JSON.stringify(state));
-    self.postMessage({ cmd: "finished", msg: { slices: slices, state: state, inOrder: steps } });
+    self.postMessage({ cmd: "finished", msg: { slices: slices, state: state, epilogue: epilogue } });
 }

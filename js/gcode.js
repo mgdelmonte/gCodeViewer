@@ -1,12 +1,11 @@
+// UI elements and state
 var progress, info, edit, gcode, stepPills, slider, sliderHandle, worker;
-var sliceNum = null, stepNum = 0;
+var sliceNum = null, stepNum = 0, stepFilter = "All";
+
+// the model
 var slices = [];
 var state = {};
-var inOrder = [];
-
-const All = 0, Warnings = 1, Deleted = 2;
-var stepFilter = All;
-
+var epilogue = "";
 
 
 function checkCapabilities() {
@@ -48,6 +47,7 @@ function init() {
     $('#file').on('change', onChangeFile);
     $("#saveas").click(save);
     $('#deleteStep').click(onDeleteStep);
+    $('#stepFilter').on('change', function(evt) { setFilter($(this).val()) });
     stepPills = $("#stepPills");
     slider = $("#slider");
     sliderHandle = $("#sliderhandle");
@@ -84,6 +84,7 @@ function init() {
             case 39: setSliceNum(sliceNum, stepNum + 1); break; // right
             case 36: setSliceNum(sliceNum, 0); break; // home
             case 35: setSliceNum(sliceNum, slices[sliceNum].length - 1); break; // end
+            case 70: setFilter(); break;
             case 90: case 101: case 12: autozoom(); break // z, 5, numpad 5, numpad 5 in numlock
             case 46: case 8: onDeleteStep(); break; // del, backspace
             default: return;
@@ -103,12 +104,16 @@ function setProgress(pct) {
     progress.show().find('.bar').width(v).text(v);
 }
 
+function revName(fn) {
+    return fn.replace(/(.+?)(?:-v(\d+))?(\..+)?$/i, function(m,p1,p2,p3) { return [p1, "-v", (Number(p2) || 0)+1, p3 || ""].join("") });
+}
+
 function onChangeFile(evt) {
     evt.stopPropagation();
     evt.preventDefault();
     var files = evt.dataTransfer ? evt.dataTransfer.files : evt.target.files;
     var reader = new FileReader();
-    $("#filename").val(evt.target.files[0].name);
+    $("#filename").val(revName(evt.target.files[0].name));
     reader.onload = function(file) {
         //$('#gcode').hide();
         //edit.hide();
@@ -127,22 +132,45 @@ function onDragover(evt) {
 
 function save(evt) {
     if(!slices.length) return;
+
     // not properly ordered
-    var text = slices.map(function(s) { return s.map(function(v) { return v.gcode.join('\n') }).join('\n') }).join('\n');
+    // var text = slices.map(function(s) { return s.map(function(v) { return v.gcode.join('\n') }).join('\n') }).join('\n');
+
+    // filtered and ordered
+    var steps = [];
+    slices.forEach(function(sl) {
+        sl.sort(function(a,b) { return a.ix < b.ix }).forEach(function st(st) {
+            if( !st.deleted )
+                steps.push(st);
+        })
+    });
+    var text = [steps.map(function(st) { return st.gcode.join('\n') }).join('\n'), epilogue].join("\n").trim();
+
     var filename = $("#filename").val();
     var blob = new Blob([text], { type: "text/plain" });//{type: "text/plain;charset=utf-8"});
     saveAs(blob, filename);
+    // increment the rev after saving
+    $("#filename").val(revName(filename));
+
 }
 
 
-function onDeleteStep(evt) {
+function onDeleteStep(slicenum, stepnum) {
+    if( slicenum == undefined ) slicenum = sliceNum;
+    if( stepnum == undefined ) stepnum = stepNum;
     if(!slices.length) return;
-    if(stepNum == 0) {
+    var step = slices[sliceNum][stepNum];
+    if( step.deleted ) {
+        // undelete this step
+        delete step.deleted;
+    } else if(stepNum == 0) {
+        // TODO solve by adding Z step to new first slice
+        // but still cannot allow deleting ALL steps in a slice
         alert("You can't delete the first step in a slice.");
         return;
+    } else {
+        step.deleted = true;
     }
-    // TODO naive; better may be to edit slice to be a move
-    slices[sliceNum].splice(stepNum, 1);
     setSliceNum(sliceNum, stepNum - 1);
 }
 
@@ -158,6 +186,37 @@ function badge(x, type) {
     return `<span class="badge${type}">${x}</span>`;
 }
 
+function isFiltered(step, type) {
+    type = type || stepFilter;
+    switch(type) {
+        case "All": return step.deleted;
+        case "Warnings": return step.deleted || !step.warnings;
+        case "Deleted": return !step.deleted;
+    }
+}
+
+function setFilter(type) {
+    // if type is not given then cycle to next valid filter
+    function nextFilter(t) {
+        const filters = ["All","Warnings","Deleted"];
+        var f = filters.indexOf(t)+1; 
+        if( f < 0 || f >= filters.length)
+            f = 0;
+        // return only if there are steps at this filter
+        t = filters[f];
+        return slices[sliceNum].some(function(st){ return !isFiltered(st, t)}) ? t : nextFilter(t);
+    }
+    type = type || nextFilter(stepFilter);
+    $('#stepFilter').val(type);
+    stepFilter = type;
+    var steps = slices[sliceNum];
+    for( var s = 0; s < steps.length; s++ )
+        if( !isFiltered(steps[s]) )
+            return setSliceNum(sliceNum, s);
+    // fallback
+    setSliceNum(sliceNum, 0);
+}
+
 
 function setSliceNum(slicenum, stepnum) {
     if(slicenum < 0 || slicenum > slices.length - 1) return;
@@ -166,39 +225,37 @@ function setSliceNum(slicenum, stepnum) {
         sliceNum = slicenum;
         stepnum = 0;
     }
-    if(stepnum >= 0 && stepnum < steps.length && stepnum != stepNum) {
-        // if filtered, choose next unfiltered stepnum
-        switch(stepFilter) {
-            case All: while( steps[stepnum].deleted ) stepnum += Math.sign(stepNum-stepnum); break;
-            case Warnings: while( !steps[stepnum].warning ) stepnum += Math.sign(stepNum-stepnum); break;
-            case Deleted: while( steps[stepnum].deleted ) stepnum += Math.sign(stepNum-stepnum); break;
-        }
+    // ensure stepnum is valid and unfiltered; if filtered, choose next unfiltered stepnum
+    while( stepnum >= 0 && stepnum < steps.length && isFiltered(steps[stepnum]) )
+        stepnum += Math.sign(stepnum-stepNum || 1);
+    if(stepnum >= 0 && stepnum < steps.length)
         stepNum = stepnum;
-    }
-    slider.show().slider('value', slicenum);
+    var step = steps[stepNum];
+    // if the only valid step is filtered, change the filter to All
+    if( isFiltered(step) )
+        return setFilter('All');
+    slider.show().slider('value', sliceNum);
     sliderHandle.text(steps[0].z + 'mm');
-    $('#deleteStep').attr("disabled", stepNum == 0);
+    //$('#deleteStep').attr("disabled", stepNum == 0); // will eventually allow deleting first step
+    $('#deleteStep').text(step.deleted ? "Restore" : "Delete");
     render();
     stepPills.html(steps.map(function(s, i) {
-        var si = stepInfo(s);
-        var cl = si.filament < 1 ? " label-warning" : "";
+        if( isFiltered(s) ) return "";
+        var cl = s.warnings ? " label-warning" : "";
         if(i == stepNum) cl += " active";
-        return `<a sn=${i} href=# class="label${cl}">${si.filament}</a>`;
+        return `<a sn=${i} href=# class="label${cl}">${s.filament.toFixed(2)}</a>`;
     }).join(' '));
     stepPills.find('a').not('.active').click(function() { setSliceNum(sliceNum, $(this).attr('sn')); });
     // show slice/step info
-    var step = steps[stepNum];
-    // TODO omit moveless steps?
     if(step.moves.length > 0) {
-        var si = stepInfo(step);
         info.html([
             pill(`Slice: ${sliceNum + 1} of ${slices.length}`),
             pill(`z: ${steps[0].z}mm`),
             pill(`step: ${stepNum + 1} of ${steps.length}`),
             pill(`moves: ${step.moves.length}`),
-            pill(`distance: ${si.distance}mm`),
-            pill(`filament: ${si.filament}mm`)
-        ].join('\n'));
+            pill(`distance: ${step.distance.toFixed(2)}mm`),
+            pill(`filament: ${step.filament.toFixed(2)}mm`)
+        ].concat((step.warnings || []).map(function(w) { return pill("warning: "+w, "warning") })).join("\n"));
     }
     else
         info.html(`<span class="label label-info">Slice: ${sliceNum + 1} of ${slices.length}</span> (cleanup, no extrusion)`);
@@ -210,22 +267,18 @@ function step() {
     return slices[sliceNum][stepNum];
 }
 
-// TODO calc in worker and cache; slows render on slice with lots of steps
-function stepInfo(step) {
+// TODO calc in worker
+function stepBounds(step) {
     step = step || slices[sliceNum][stepNum];
-    var distance = 0, filament = 0, min = { x: step.x, y: step.y }, max = { x: step.x, y: step.y }, x = step.x, y = step.y;
+    var min = { x: step.x, y: step.y }, max = { x: step.x, y: step.y };
     step.moves.forEach(function(m) {
-        distance += Math.sqrt((x - m.x) * (x - m.x) + (y - m.y) * (y - m.y));
-        filament += m.e;
-        x = m.x;
-        y = m.y;
-        min.x = Math.min(min.x, x);
-        min.y = Math.min(min.y, y);
-        max.x = Math.max(max.x, x);
-        max.y = Math.max(max.y, y);
+        min.x = Math.min(min.x, m.x);
+        min.y = Math.min(min.y, m.y);
+        max.x = Math.max(max.x, m.x);
+        max.y = Math.max(max.y, m.y);
     });
     var size = { x: max.x - min.x, y: max.y - min.y }
-    return { distance: distance.toFixed(2), filament: filament.toFixed(2), min: min, max: max, size: size };
+    return { min: min, max: max, size: size };
 }
 
 
@@ -248,7 +301,7 @@ function centerXform(obj, percent) {
 function autozoom() {
     // zoom to show current step
     if(!slices.length) return;
-    zoomXform = zoomXform ? null : centerXform(stepInfo(slices[sliceNum][stepNum]), 0.5);
+    zoomXform = zoomXform ? null : centerXform(stepBounds(slices[sliceNum][stepNum]), 0.5);
     cameraXform = null;
     render();
 }
@@ -267,7 +320,7 @@ function processMessage(e) {
             $('#gcode').show();
             slices = data.msg.slices;
             state = data.msg.state;
-            inOrder = data.msg.inOrder;
+            epilogue = data.msg.epilogue;
             slider.slider({ max: slices.length - 1 });
             //sliceNum = 0;
             setSliceNum(0);
@@ -280,6 +333,8 @@ function processMessage(e) {
 
 var canvas, ctx;
 var svg = document.createElementNS("http://www.w3.org/2000/svg", 'svg');
+var lastX = 0, lastY = 0, dragStart, dragged;
+
 var modelXform, zoomXform, cameraXform;
 // got this from gcv0, which should be nozzle dia or actual extrusion width?
 // gcv0 uses lineWidth = (filamentDia * (nozzleDia / layerHeight) / (2 * zoomFactor)
@@ -287,8 +342,6 @@ var modelXform, zoomXform, cameraXform;
 var lineWidth = 0.854 / 3; // should be actual line width * 0.75 (for visualization)
 // line width can be nozzledia for now; 
 
-var lastX = 0, lastY = 0, dragStart, dragged;
-var gridSizeX = 200, gridSizeY = 200, gridStep = 10;
 
 function startCanvas() {
     canvas = document.getElementById('canvas');
@@ -387,16 +440,13 @@ function drawCircle(x, y, radius) {
 function drawArrow(x1, y1, x2, y2, size) {
     size = size || 1;
     var angle = Math.atan2(y2 - y1, x2 - x1);
-    //console.log(angle);
     ctx.save();
     ctx.lineWidth = 0.2;
     ctx.lineCap = 'miter';
     ctx.lineJoin = 'miter';
     ctx.fillStyle = 'orange';
     ctx.globalAlpha = 0.75;
-    //ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
     ctx.translate(x1, y1);
-    //drawCircle(0,0,size);
     ctx.rotate(angle);
     ctx.beginPath();
     ctx.moveTo(0, size);
@@ -405,8 +455,6 @@ function drawArrow(x1, y1, x2, y2, size) {
     ctx.closePath();
     ctx.fill();
     ctx.restore();
-    //ctx.rotate(-angle);
-    //ctx.translate(x1, y1);
 }
 
 
@@ -559,7 +607,7 @@ function drawSlice(slicenum, stepnum) {
         }
     }
     // show focus box for small steps
-    var si = stepInfo(steps[stepNum]);
+    var si = stepBounds(steps[stepNum]);
     if(si.size.x < state.size.x / 8 || si.size.y < state.size.y / 8) {
         ctx.setLineDash([1, 1]);
         ctx.strokeStyle = "#f00";
