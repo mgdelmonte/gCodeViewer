@@ -4,6 +4,10 @@ var slices = [];
 var state = {};
 var inOrder = [];
 
+const All = 0, Warnings = 1, Deleted = 2;
+var stepFilter = All;
+
+
 
 function checkCapabilities() {
     var warnings = [];
@@ -162,7 +166,15 @@ function setSliceNum(slicenum, stepnum) {
         sliceNum = slicenum;
         stepnum = 0;
     }
-    if(stepnum >= 0 && stepnum < steps.length) stepNum = stepnum;
+    if(stepnum >= 0 && stepnum < steps.length && stepnum != stepNum) {
+        // if filtered, choose next unfiltered stepnum
+        switch(stepFilter) {
+            case All: while( steps[stepnum].deleted ) stepnum += Math.sign(stepNum-stepnum); break;
+            case Warnings: while( !steps[stepnum].warning ) stepnum += Math.sign(stepNum-stepnum); break;
+            case Deleted: while( steps[stepnum].deleted ) stepnum += Math.sign(stepNum-stepnum); break;
+        }
+        stepNum = stepnum;
+    }
     slider.show().slider('value', slicenum);
     sliderHandle.text(steps[0].z + 'mm');
     $('#deleteStep').attr("disabled", stepNum == 0);
