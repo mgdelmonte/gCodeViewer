@@ -251,7 +251,7 @@ function setSliceNum(slicenum, stepnum) {
             pill(`moves: ${step.moves.length}`),
             pill(`distance: ${step.distance.toFixed(2)}mm`),
             pill(`filament: ${step.filament.toFixed(2)}mm`),
-            pill(`vpm: ${(100*si.vpm.min).toFixed(2)}% < ${(100*si.vpm.e/si.vpm.vol).toFixed(2)}% < ${(100*si.vpm.max).toFixed(2)}%`)
+            pill(`ev: ${(100*si.vpm.min).toFixed(2)} < ${(100*si.vpm.avg).toFixed(2)} < ${(100*si.vpm.max).toFixed(2)}`)
         ].concat((step.warnings || []).map(function(w) { return pill("warning: "+w, "warning") })).join("\n"));
     }
     else
@@ -272,20 +272,27 @@ function stepBounds(step) {
     // TEST get min/avg/max vpm (extruded vol/mm as a percent)
     // TODO cheating to get slice height (dz) this way; need to store in slice instead
     var dz = slices[1][0].z - slices[0][0].z;
-    var vpm = { min:Infinity, max:0, e:0, vol:0 };
+    // vpm is vol extruded (ve) / vol traversed (vt)
+    // ve is pi*dia*de
+    // vt for a line segment with rounded ends is ((pi*dia)+(dia*dx))*dz
+    // but ignore line ends and assume extrusion is primed, which simplifies to dia*dx*dz
+    // and dia factors out
+    var vpm = { min:Infinity, max:0 };
+    var ve = 0, vt = 0;
     step.moves.forEach(function(m) {
         min.x = Math.min(min.x, m.x);
         min.y = Math.min(min.y, m.y);
         max.x = Math.max(max.x, m.x);
         max.y = Math.max(max.y, m.y);
         if( m.e > 0 && m.d > 0 ) {
-            vpm.e += m.e;
-            var vol = m.d * dz;
-            vpm.vol += vol;
-            vpm.min = Math.min(vpm.min, m.e/vol);
-            vpm.max = Math.max(vpm.max, m.e/vol);
+            ve += m.e;
+            vt += m.d;
+            var vps = (Math.PI*m.e)/(m.d*dz)
+            vpm.min = Math.min(vpm.min, vps);
+            vpm.max = Math.max(vpm.max, vps);
         }
     });
+    vpm.avg = (Math.PI*ve)/(vt*dz);
     var size = { x: max.x - min.x, y: max.y - min.y }
     return { min: min, max: max, size: size, vpm:vpm };
 }
