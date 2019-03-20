@@ -17,12 +17,13 @@
     <script src="lib/jquery-ui-1.9.0.custom.js"></script>
     <script src="lib/codemirror.js"></script>
     <script src="lib/mode_gcode/gcode_mode.js"></script>
-    <script src="lib/three.js"></script>
+    <!-- <script src="lib/three.js"></script> -->
     <script src="lib/bootstrap.js"></script>
     <script src="lib/modernizr.custom.09684.js"></script>
-    <script src="lib/TrackballControls.js"></script>
+    <!-- <script src="lib/TrackballControls.js"></script> -->
     <script src="lib/zlib.min.js"></script>
     <script src="lib/FileSaver.min.js"></script>
+    <!-- <script src="lib/stl_viewer/stl_viewer.min.js"></script> -->
     <script src="js/gcode.js"></script>
 </head>
 
@@ -47,7 +48,7 @@
     #slider { 
         position:absolute; 
         left:-17px; 
-        top:10px; 
+        top:40px; 
         display:none 
     }
     #sliderhandle {
@@ -93,6 +94,7 @@
     </div>
     <script>
         init();
+        // var stl_viewer=new StlViewer(document.getElementById("three"), { models: [ {id:0, filename:"boat.stl"} ] });
     </script>
 </body>
 

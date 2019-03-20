@@ -85,9 +85,9 @@ function init() {
             case 39: setSliceNum(sliceNum, stepNum + 1); break; // right
             case 36: setSliceNum(sliceNum, 0); break; // home
             case 35: setSliceNum(sliceNum, slices[sliceNum].length - 1); break; // end
-            case 70: setFilter(); break;
+            case 70: setFilter(); break; // f
             case 90: case 101: case 12: autozoom(); break // z, 5, numpad 5, numpad 5 in numlock
-            case 46: case 8: onDeleteStep(); break; // del, backspace
+            case 46: case 8: case 68: onDeleteStep(); break; // del, backspace, d
             default: return;
         }
         // event.stopPropagation();
@@ -243,13 +243,15 @@ function setSliceNum(slicenum, stepnum) {
     stepPills.find('a').not('.active').click(function() { setSliceNum(sliceNum, $(this).attr('sn')); });
     // show slice/step info
     if(step.moves.length > 0) {
+        var si = stepBounds(step);
         info.html([
             pill(`Slice: ${sliceNum + 1} of ${slices.length}`),
             pill(`z: ${steps[0].z}mm`),
             pill(`step: ${stepNum + 1} of ${steps.length}`),
             pill(`moves: ${step.moves.length}`),
             pill(`distance: ${step.distance.toFixed(2)}mm`),
-            pill(`filament: ${step.filament.toFixed(2)}mm`)
+            pill(`filament: ${step.filament.toFixed(2)}mm`),
+            pill(`vpm: ${(100*si.vpm.min).toFixed(2)}% < ${(100*si.vpm.e/si.vpm.vol).toFixed(2)}% < ${(100*si.vpm.max).toFixed(2)}%`)
         ].concat((step.warnings || []).map(function(w) { return pill("warning: "+w, "warning") })).join("\n"));
     }
     else
@@ -262,18 +264,30 @@ function step() {
     return slices[sliceNum][stepNum];
 }
 
+
 // TODO calc in worker
 function stepBounds(step) {
     step = step || slices[sliceNum][stepNum];
     var min = { x: step.x, y: step.y }, max = { x: step.x, y: step.y };
+    // TEST get min/avg/max vpm (extruded vol/mm as a percent)
+    // TODO cheating to get slice height (dz) this way; need to store in slice instead
+    var dz = slices[1][0].z - slices[0][0].z;
+    var vpm = { min:Infinity, max:0, e:0, vol:0 };
     step.moves.forEach(function(m) {
         min.x = Math.min(min.x, m.x);
         min.y = Math.min(min.y, m.y);
         max.x = Math.max(max.x, m.x);
         max.y = Math.max(max.y, m.y);
+        if( m.e > 0 && m.d > 0 ) {
+            vpm.e += m.e;
+            var vol = m.d * dz;
+            vpm.vol += vol;
+            vpm.min = Math.min(vpm.min, m.e/vol);
+            vpm.max = Math.max(vpm.max, m.e/vol);
+        }
     });
     var size = { x: max.x - min.x, y: max.y - min.y }
-    return { min: min, max: max, size: size };
+    return { min: min, max: max, size: size, vpm:vpm };
 }
 
 
@@ -512,7 +526,7 @@ function drawArrow(x1, y1, x2, y2, size) {
 function onResize() {
     canvas.width = $(canvas).parent().width() - 20;
     canvas.height = window.innerHeight - 20;//$(canvas).parent().height();
-    $('#slider').height(canvas.height - 20);
+    $('#slider').height(canvas.height - 50);
     // scale model to fill canvas and center it
     if(slices.length) {
         modelXform = centerXform(state, 0.9);
@@ -545,13 +559,14 @@ function drawSlice(slicenum, stepnum) {
     if(slices.length == 0) return;
     var steps = slices[slicenum];
     stepnum = stepnum || 0;
-    //ctx.strokeStyle = "#000000";
+    ctx.save();
     ctx.lineWidth = lineWidth;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     for(var i = 0; i < steps.length; i++) {
         var step = steps[i];
         ctx.strokeStyle = i < stepnum ? "#888" : i == stepnum ? "#00f" : "#ccc";
+        ctx.globalAlpha = 1;
         ctx.beginPath();
         ctx.moveTo(step.x, step.y);
         var x = step.x, y = step.y;
@@ -595,10 +610,6 @@ function drawSlice(slicenum, stepnum) {
                     return true;
                 }
             });
-            // ctx.strokeStyle = 'orange';
-            // ctx.beginPath()
-            // drawCircle(step.x, step.y, 1);
-            // ctx.stroke();
         }
     }
     // show focus box for small steps
@@ -610,6 +621,7 @@ function drawSlice(slicenum, stepnum) {
         ctx.strokeRect(si.min.x - 10, si.min.y - 10, si.size.x + 20, si.size.y + 20);
         ctx.setLineDash([]);
     }
+    ctx.restore();
 }
 
 
