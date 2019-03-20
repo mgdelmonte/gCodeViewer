@@ -500,36 +500,35 @@ function drawSlice(slicenum, stepnum) {
         ctx.beginPath();
         ctx.moveTo(step.x, step.y);
         var x = step.x, y = step.y;
+        var linetype = 0;
+        // changes linetype (normal, travel, etc.) efficiently: only strokes when necessary
+        function setType(t) {
+            if( t === linetype ) return;
+            linetype = t;
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            switch( t ) {
+                case 0: ctx.strokeStyle = i < stepnum ? "#888" : i == stepnum ? "#00f" : "#ccc"; ctx.globalAlpha = 1; break;
+                case 1: ctx.strokeStyle = 'yellow'; ctx.globalAlpha = 0.5; break;
+            }
+        }
         step.moves.forEach(function(m) {
             // TODO set line width, color, etc. based on extrusion, speed, etc.
-
-            // OLD highlight e=0 moves in the current step
             if( m.e == 0) {
                 // highlight for the current step; omit for other steps
                 if( i == stepnum ) {
-                    ctx.stroke();
-                    ctx.beginPath();
-                    ctx.moveTo(x, y);
-                    ctx.strokeStyle = 'yellow';
-                    ctx.globalAlpha = 0.5;
+                    setType(1);
                     ctx.lineTo(m.x, m.y);
-                    ctx.stroke();
-                    ctx.beginPath();
-                    ctx.moveTo(m.x, m.y);
-                    ctx.strokeStyle = '#00f';
-                    ctx.globalAlpha = 1;
                 }
                 else
                     ctx.moveTo(m.x, m.y);
-            } else
+            } else {
+                setType(0);
                 ctx.lineTo(m.x, m.y);
+            }
             x = m.x;
             y = m.y;
-            // skip e=0
-            // if(m.e == 0)
-            //     ctx.moveTo(m.x, m.y);
-            // else
-            //     ctx.lineTo(m.x, m.y);
             });
         ctx.stroke();
         // highlight start for current step
