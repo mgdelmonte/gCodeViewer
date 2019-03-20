@@ -14,25 +14,26 @@ function checkCapabilities() {
     Modernizr.addTest('filereader', function() {
         return !!(window.File && window.FileList && window.FileReader);
     });
-    if(!Modernizr.canvas) fatal.push("Your browser must support HTML5 Canvas.");
-    if(!Modernizr.filereader) fatal.push("Your browser must support HTML5 File API.");
-    if(!Modernizr.webworkers) fatal.push("Your browser must support HTML5 Web Workers.");
-    if(!Modernizr.svg) fatal.push("Your browser must support HTML5 SVG.");
+    if(!Modernizr.canvas) fatal.push("Your browser does not support HTML5 Canvas.");
+    if(!Modernizr.filereader) fatal.push("Your browser does not support HTML5 File API.");
+    if(!Modernizr.webworkers) fatal.push("Your browser does not support HTML5 Web Workers.");
+    if(!Modernizr.svg) fatal.push("Your browser does not support HTML5 SVG.");
     if(fatal.length > 0) {
-        $('body').innerHTML = '<ul>' + fatal.join('<li>') + '</ul>';
+        $('body').html("<h1>Your browser cannot run this application.</h1><ul>" + fatal.map(function(f) { return "<li>"+f } ).join('') + '</ul>');
         return false;
     }
     if(!Modernizr.webgl) {
-        warnings.push("Your browser should support HTML5 Web GL; 3D rendering may be slow.");
+        warnings.push("Your browser should support HTML5 Web GL.  3D rendering may be slow.");
         //GCODE.renderer3d.setOption({ rendererType: "canvas" });
     }
-    // if(!Modernizr.draganddrop) warnings.push("Your browser doesn't seem to support HTML5 Drag'n'Drop, Drop area will not work.");
+    if(!Modernizr.draganddrop) warnings.push("Your browser doesn't support drag-and-drop.");
     if(warnings.length > 0) {
-        info.html = '<ul>' + warnings.join('<li>') + '</ul>';
+        info.show().html(warnings.map(function(w) { return `<div class="alert alert-warning"><strong>Warning:</strong> ${w}</div>` }).join('\n'));
         console.log("Initialization succeeded with warnings.")
     }
     return true;
 }
+
 
 function init() {
     info = $('#info');
@@ -115,9 +116,6 @@ function onChangeFile(evt) {
     var reader = new FileReader();
     $("#filename").val(revName(evt.target.files[0].name));
     reader.onload = function(file) {
-        //$('#gcode').hide();
-        //edit.hide();
-
         setProgress(0);
         worker.postMessage({ cmd: "parse", msg: file.target.result });
     };
@@ -132,10 +130,8 @@ function onDragover(evt) {
 
 function save(evt) {
     if(!slices.length) return;
-
     // not properly ordered
     // var text = slices.map(function(s) { return s.map(function(v) { return v.gcode.join('\n') }).join('\n') }).join('\n');
-
     // filtered and ordered
     var steps = [];
     slices.forEach(function(sl) {
@@ -145,7 +141,6 @@ function save(evt) {
         })
     });
     var text = [steps.map(function(st) { return st.gcode.join('\n') }).join('\n'), epilogue].join("\n").trim();
-
     var filename = $("#filename").val();
     var blob = new Blob([text], { type: "text/plain" });//{type: "text/plain;charset=utf-8"});
     saveAs(blob, filename);
