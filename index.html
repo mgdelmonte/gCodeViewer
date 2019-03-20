@@ -28,7 +28,6 @@
 
 <style>
     body { overflow: hidden; margin:5px }
-    #save { display:none }
     #filename { font-size:8pt; padding-left:3px; }
     #stepFilter {     
         font-size: 8pt;
@@ -38,12 +37,11 @@
         padding: 0;
         vertical-align: top;
     }
-    #stepnav { white-space: nowrap; }
-    #two { position:relative }
+    #stepnav { white-space: nowrap; margin-bottom:5px; }
     #progress { display:none; width:100% }
-    #info { display:none }
+    #save, #info, #controls, #gcode { display:none }
     #edit { display:none; padding:5px 0; }
-    #gcode { display:none }
+    #two { position:relative }
     #slider { 
         position:absolute; 
         left:-17px; 
@@ -71,6 +69,10 @@
             <span id="save"><button id="saveas" type="button" class="btn">Save</button> <input id="filename"></span>
             <div id="dropZone"></div>
             <div class="progress" id="progress"><div class="bar"></div></div>
+            <div id=controls>
+                <label class="checkbox inline"><input type="checkbox" id="showgrid" checked>grid</label>
+                <label class="checkbox inline"><input type="checkbox" id="travels" checked>travels</label>
+            </div>
             <div id="info"></div>
             <div id="edit">
                 <button id="deleteStep" type="button" class="btn btn-danger">Delete</button>

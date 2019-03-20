@@ -61,15 +61,15 @@ function init() {
     slider.find(".ui-slider-handle").unbind('keydown');
     //$('body').bind('keydown', 
     window.onkeydown = function(event) {
-        if( /^(?:input|textarea)$/i.test(event.target.nodeName) )
+        if(/^(?:input|textarea)$/i.test(event.target.nodeName))
             return;
         // console.log(event.keyCode);
-        if( event.shiftKey )    
+        if(event.shiftKey)
             return;
         // ctrl
-        if( event.ctrlKey ) switch(event.keyCode) {
+        if(event.ctrlKey) switch(event.keyCode) {
             case 36: setSliceNum(0); return; // home
-            case 35: setSliceNum(slices.length-1); return; // end
+            case 35: setSliceNum(slices.length - 1); return; // end
             default: return;
         }
         // normal
@@ -122,35 +122,35 @@ function onDragover(evt) {
 }
 
 function save(evt) {
-    if( !slices.length ) return;
+    if(!slices.length) return;
     // not properly ordered
-    var text = slices.map(function(s){ return s.map(function(v){ return v.gcode.join('\n') }).join('\n')}).join('\n');
+    var text = slices.map(function(s) { return s.map(function(v) { return v.gcode.join('\n') }).join('\n') }).join('\n');
     var filename = $("#filename").val();
-    var blob = new Blob([text], {type: "text/plain"});//{type: "text/plain;charset=utf-8"});
+    var blob = new Blob([text], { type: "text/plain" });//{type: "text/plain;charset=utf-8"});
     saveAs(blob, filename);
 }
 
 
 function onDeleteStep(evt) {
-    if( !slices.length ) return;
-    if( stepNum == 0 ) { 
+    if(!slices.length) return;
+    if(stepNum == 0) {
         alert("You can't delete the first step in a slice.");
         return;
     }
     // TODO naive; better may be to edit slice to be a move
     slices[sliceNum].splice(stepNum, 1);
-    setSliceNum(sliceNum, stepNum-1);
+    setSliceNum(sliceNum, stepNum - 1);
 }
 
 
 function pill(x, type) {
-    if( type == undefined ) type = 'info';
-    if( type ) type = " label-"+type;
+    if(type == undefined) type = 'info';
+    if(type) type = " label-" + type;
     return `<span class="label${type}">${x}</span>`;
 }
 function badge(x, type) {
     type = type || "";
-    if( type ) type = " badge-"+type;
+    if(type) type = " badge-" + type;
     return `<span class="badge${type}">${x}</span>`;
 }
 
@@ -167,10 +167,10 @@ function setSliceNum(slicenum, stepnum) {
     sliderHandle.text(steps[0].z + 'mm');
     $('#deleteStep').attr("disabled", stepNum == 0);
     render();
-    stepPills.html(steps.map(function(s,i) {
+    stepPills.html(steps.map(function(s, i) {
         var si = stepInfo(s);
         var cl = si.filament < 1 ? " label-warning" : "";
-        if( i == stepNum ) cl += " active";
+        if(i == stepNum) cl += " active";
         return `<a sn=${i} href=# class="label${cl}">${si.filament}</a>`;
     }).join(' '));
     stepPills.find('a').not('.active').click(function() { setSliceNum(sliceNum, $(this).attr('sn')); });
@@ -187,14 +187,18 @@ function setSliceNum(slicenum, stepnum) {
             pill(`distance: ${si.distance}mm`),
             pill(`filament: ${si.filament}mm`)
         ].join('\n'));
-        }
+    }
     else
         info.html(`<span class="label label-info">Slice: ${sliceNum + 1} of ${slices.length}</span> (cleanup, no extrusion)`);
     gcode.setValue(step.gcode.join('\n'));
-    gcode.scrollTo(0,0);
+    gcode.scrollTo(0, 0);
 }
 
+function step() {
+    return slices[sliceNum][stepNum];
+}
 
+// TODO calc in worker and cache; slows render on slice with lots of steps
 function stepInfo(step) {
     step = step || slices[sliceNum][stepNum];
     var distance = 0, filament = 0, min = { x: step.x, y: step.y }, max = { x: step.x, y: step.y }, x = step.x, y = step.y;
@@ -208,8 +212,8 @@ function stepInfo(step) {
         max.x = Math.max(max.x, x);
         max.y = Math.max(max.y, y);
     });
-    var size = {x:max.x-min.x, y:max.y-min.y}
-    return { distance: distance.toFixed(2), filament: filament.toFixed(2), min: min, max: max, size:size };
+    var size = { x: max.x - min.x, y: max.y - min.y }
+    return { distance: distance.toFixed(2), filament: filament.toFixed(2), min: min, max: max, size: size };
 }
 
 
@@ -223,7 +227,7 @@ function centerXform(obj, percent) {
     var scale = percent * (obj.size.x > obj.size.y ? canvas.width / obj.size.x : canvas.height / obj.size.y);
     // cap max scale at 1000
     // TODO better to set minimum feature size
-    if( scale > 1000) scale = 1000;
+    if(scale > 1000) scale = 1000;
     var dx = -obj.min.x + (canvas.width / scale - obj.size.x) / 2;
     var dy = -obj.min.y + (canvas.height / scale - obj.size.y) / 2;
     return svg.createSVGMatrix().scale(scale).translate(dx, dy);
@@ -231,7 +235,7 @@ function centerXform(obj, percent) {
 
 function autozoom() {
     // zoom to show current step
-    if( !slices.length ) return;
+    if(!slices.length) return;
     zoomXform = zoomXform ? null : centerXform(stepInfo(slices[sliceNum][stepNum]), 0.5);
     cameraXform = null;
     render();
@@ -268,7 +272,7 @@ var modelXform, zoomXform, cameraXform;
 // got this from gcv0, which should be nozzle dia or actual extrusion width?
 // gcv0 uses lineWidth = (filamentDia * (nozzleDia / layerHeight) / (2 * zoomFactor)
 // but layerHeight is really AVERAGE layerheight, so it's nonsense
-var lineWidth = 0.854/3; // should be actual line width * 0.75 (for visualization)
+var lineWidth = 0.854 / 3; // should be actual line width * 0.75 (for visualization)
 // line width can be nozzledia for now; 
 
 var lastX = 0, lastY = 0, dragStart, dragged;
@@ -280,12 +284,12 @@ function startCanvas() {
     // faster without alpha?
     //ctx = canvas.getContext('2d', {alpha:false});
     // override transform function so it'll take a matrix
-    (function(){
+    (function() {
         var xf = ctx.transform;
-        ctx.transform = function(a,b,c,d,e,f) {
-            if( a instanceof SVGMatrix ) 
-                return xf.call(ctx,a.a,a.b,a.c,a.d,a.e,a.f);
-            return xf.call(ctx,a,b,c,d,e,f);
+        ctx.transform = function(a, b, c, d, e, f) {
+            if(a instanceof SVGMatrix)
+                return xf.call(ctx, a.a, a.b, a.c, a.d, a.e, a.f);
+            return xf.call(ctx, a, b, c, d, e, f);
         }
     })();
     ctx.lineWidth = 1;
@@ -310,7 +314,7 @@ function startCanvas() {
         if(dragStart) {
             var pt = transformedPoint(lastX, lastY);
             //console.log("dragging from ", dragStart, " to ", pt);
-            if( !cameraXform ) cameraXform = svg.createSVGMatrix();
+            if(!cameraXform) cameraXform = svg.createSVGMatrix();
             cameraXform = cameraXform.translate(pt.x - dragStart.x, pt.y - dragStart.y);
             render();
         }
@@ -344,17 +348,17 @@ function transformedPoint(x, y) {
     pt.x = x; pt.y = y;
     var xf = svg.createSVGMatrix();
     var m = ctx.getTransform();
-    "abcdef".split("").forEach(function(v){ xf[v] = m[v]});
+    "abcdef".split("").forEach(function(v) { xf[v] = m[v] });
     return pt.matrixTransform(xf.inverse());
 }
 
 
 function zoom(clicks, x, y) {
-    x = x || canvas.width/2;
-    y = y || canvas.height/2;
+    x = x || canvas.width / 2;
+    y = y || canvas.height / 2;
     var pt = transformedPoint(x, y);
     // scale by 10% per delta
-    if( !cameraXform ) cameraXform = svg.createSVGMatrix();
+    if(!cameraXform) cameraXform = svg.createSVGMatrix();
     var factor = Math.pow(1.1, clicks);
     cameraXform = cameraXform.translate(-pt.x, -pt.y).scale(factor).translate(pt.x, pt.y);
     render();
@@ -365,23 +369,29 @@ function zoom(clicks, x, y) {
 function drawCircle(x, y, radius) {
     radius = radius || 3;
     ctx.beginPath();
-    ctx.arc(x, y, radius, 0, 2*Math.PI);
+    ctx.arc(x, y, radius, 0, 2 * Math.PI);
     ctx.stroke();
 }
-function drawArrow(x1,y1,x2,y2,size) {
-    size = size || 3;
-    var angle = (180/Math.PI)*Math.atan((y2-y1)/(x1-x2));
-    console.log(angle);
+function drawArrow(x1, y1, x2, y2, size) {
+    size = size || 1;
+    var angle = Math.atan2(y2 - y1, x2 - x1);
+    //console.log(angle);
     ctx.save();
-    //ctx.translate(canvas.width/2, canvas.height/2);
-    ctx.translate(-x1, -y1);
+    ctx.lineWidth = 0.2;
+    ctx.lineCap = 'miter';
+    ctx.lineJoin = 'miter';
+    ctx.fillStyle = 'orange';
+    ctx.globalAlpha = 0.75;
+    //ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    ctx.translate(x1, y1);
+    //drawCircle(0,0,size);
     ctx.rotate(angle);
     ctx.beginPath();
-    ctx.moveTo(x1+size, y1);
-    ctx.lineTo(x1, y1+size);
-    ctx.lineTo(x1-size, y1)
-    ctx.lineTo(x1+size, y1);
-    ctx.stroke();
+    ctx.moveTo(0, size);
+    ctx.lineTo(size * 2, 0);
+    ctx.lineTo(0, -size)
+    ctx.closePath();
+    ctx.fill();
     ctx.restore();
     //ctx.rotate(-angle);
     //ctx.translate(x1, y1);
@@ -458,19 +468,19 @@ function onResize() {
 
 function drawGrid(cellsize) {
     cellsize = cellsize || 10;
-    var bounds = slices.length ? {l:state.min.x, r:state.max.x, t:state.min.y, b:state.max.y} : {l:0, r:canvas.width, t:0, b:canvas.height}
+    var bounds = slices.length ? { l: state.min.x, r: state.max.x, t: state.min.y, b: state.max.y } : { l: 0, r: canvas.width, t: 0, b: canvas.height }
     ctx.strokeStyle = '#bbbbbb';
     ctx.lineWidth = 0.2;
     ctx.beginPath();
     //for(var i = 0; i <= canvas.width; i += 10) {
-    for(var x = bounds.l-cellsize; x <= bounds.r+cellsize; x += cellsize) {
-        ctx.moveTo(x, bounds.t-cellsize);
-        ctx.lineTo(x, bounds.b+cellsize);
+    for(var x = bounds.l - cellsize; x <= bounds.r + cellsize; x += cellsize) {
+        ctx.moveTo(x, bounds.t - cellsize);
+        ctx.lineTo(x, bounds.b + cellsize);
     }
     //for(var i = 0; i <= canvas.height; i += 10) {
-    for(var y = bounds.t-cellsize; y <= bounds.b+cellsize; y += cellsize) {
-        ctx.moveTo(bounds.l-cellsize, y);
-        ctx.lineTo(bounds.r+cellsize, y);
+    for(var y = bounds.t - cellsize; y <= bounds.b + cellsize; y += cellsize) {
+        ctx.moveTo(bounds.l - cellsize, y);
+        ctx.lineTo(bounds.r + cellsize, y);
     }
     ctx.stroke();
 }
@@ -486,50 +496,64 @@ function drawSlice(slicenum, stepnum) {
     ctx.lineJoin = "round";
     for(var i = 0; i < steps.length; i++) {
         var step = steps[i];
-        // highlight start for current step
-        if( i == stepnum ) {
-            ctx.strokeStyle = 'orange';
-            ctx.beginPath()
-            drawCircle(step.x, step.y, 1);
-            ctx.stroke();
-        }
         ctx.strokeStyle = i < stepnum ? "#888" : i == stepnum ? "#00f" : "#ccc";
         ctx.beginPath();
         ctx.moveTo(step.x, step.y);
+        var x = step.x, y = step.y;
         step.moves.forEach(function(m) {
             // TODO set line width, color, etc. based on extrusion, speed, etc.
 
             // OLD highlight e=0 moves in the current step
-            // if( m.e == 0) {
-            //     // highlight for the current step; omit for other steps
-            //     if( i == stepnum ) {
-            //         //ctx.stroke();
-            //         //ctx.beginPath();
-            //         ctx.strokeStyle = 'orange';
-            //         ctx.lineTo(m.x, m.y);
-            //         ctx.stroke();
-            //         ctx.strokeStyle = '#00f';
-            //         //ctx.beginPath();
-            //     }
-            //     else
-            //         ctx.moveTo(m.x, m.y);
-            // }
-
-            // just skip e=0 moves
-            if( m.e == 0)
-                ctx.moveTo(m.x, m.y);
-            else
+            if( m.e == 0) {
+                // highlight for the current step; omit for other steps
+                if( i == stepnum ) {
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                    ctx.strokeStyle = 'yellow';
+                    ctx.globalAlpha = 0.5;
+                    ctx.lineTo(m.x, m.y);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(m.x, m.y);
+                    ctx.strokeStyle = '#00f';
+                    ctx.globalAlpha = 1;
+                }
+                else
+                    ctx.moveTo(m.x, m.y);
+            } else
                 ctx.lineTo(m.x, m.y);
-        });
+            x = m.x;
+            y = m.y;
+            // skip e=0
+            // if(m.e == 0)
+            //     ctx.moveTo(m.x, m.y);
+            // else
+            //     ctx.lineTo(m.x, m.y);
+            });
         ctx.stroke();
+        // highlight start for current step
+        if(i == stepnum) {
+            step.moves.some(function(m, i) {
+                if(m.e) {
+                    var m2 = step.moves[i + 1];
+                    drawArrow(m.x, m.y, m2.x, m2.y);
+                    return true;
+                }
+            });
+            // ctx.strokeStyle = 'orange';
+            // ctx.beginPath()
+            // drawCircle(step.x, step.y, 1);
+            // ctx.stroke();
+        }
     }
     // show focus box for small steps
     var si = stepInfo(steps[stepNum]);
-    if( si.size.x < state.size.x/8 || si.size.y < state.size.y/8 ) {
+    if(si.size.x < state.size.x / 8 || si.size.y < state.size.y / 8) {
         ctx.setLineDash([1, 1]);
         ctx.strokeStyle = "#f00";
         ctx.lineWidth = 0.2;
-        ctx.strokeRect(si.min.x-10, si.min.y-10, si.size.x+20, si.size.y+20);
+        ctx.strokeRect(si.min.x - 10, si.min.y - 10, si.size.x + 20, si.size.y + 20);
         ctx.setLineDash([]);
     }
 }
@@ -542,7 +566,7 @@ function render() {
         ctx.transform(zoomXform);//.a, zoomXform.b, zoomXform.c, zoomXform.d, zoomXform.e, zoomXform.f);
     else if(modelXform)
         ctx.transform(modelXform);//.a, modelXform.b, modelXform.c, modelXform.d, modelXform.e, modelXform.f);
-    if( cameraXform )
+    if(cameraXform)
         ctx.transform(cameraXform);//.a, modelXform.b, modelXform.c, modelXform.d, modelXform.e, modelXform.f);
     drawGrid();
     if(slices.length) {

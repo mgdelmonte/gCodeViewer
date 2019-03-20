@@ -33,7 +33,7 @@ function parse(text) {
     lines.forEach(function(line, i) {
         //if(i && !(i % parseInt(lines.length / 100)))
         var t2 = new Date().getTime();
-        if( t2-time > 1000 ) {
+        if( t2-time > 100 ) {
             self.postMessage({ cmd: "progress", msg: 100 * i / lines.length });
             time = t2;
         }
@@ -83,8 +83,8 @@ function parse(text) {
             if("z" in vals) state.z = vals.z;
             if("f" in vals) state.speed = vals.f;
             if(!state.extrudeRelative && "e" in vals) state.e = vals.e;
-            // negative extrusion after a line ends a step
-            if(extruded < 0 && step.moves.length) {
+            // negative extrusion, or zero extrusion plus a z-move, after a line ends a step
+            if((extruded < 0 || (extruded==0 && moved.z)) && step.moves.length) {
                 addStep();
             }
             // start a line by extruding and continue it even if e=0
