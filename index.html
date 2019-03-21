@@ -62,6 +62,7 @@
     }
     #stepPills a.label { border:2px solid transparent; }
     #stepPills a.label.active { border:2px solid blue; }
+    #version { position:absolute; bottom:0; left: 0; padding:5px; }
 </style>
 
 <body>
@@ -92,6 +93,7 @@
             <div id="slider"><div id="sliderhandle" class="ui-slider-handle"></div></div>
         </div>
     </div>
+    <div id=version>v0.1.8</div>
     <script>
         init();
         // var stl_viewer=new StlViewer(document.getElementById("three"), { models: [ {id:0, filename:"boat.stl"} ] });

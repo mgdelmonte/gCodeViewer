@@ -106,7 +106,7 @@ function setProgress(pct) {
 }
 
 function revName(fn) {
-    return fn.replace(/(.+?)(?:-v(\d+))?(\..+)?$/i, function(m,p1,p2,p3) { return [p1, "-v", (Number(p2) || 0)+1, p3 || ""].join("") });
+    return fn.replace(/^(.+?)(?:-v(\d+))?(\.[^.]+)?$/i, function(m,p1,p2,p3) { return [p1, "-v", (Number(p2) || 0)+1, p3 || ""].join("") });
 }
 
 function onChangeFile(evt) {
@@ -134,19 +134,14 @@ function save(evt) {
     // var text = slices.map(function(s) { return s.map(function(v) { return v.gcode.join('\n') }).join('\n') }).join('\n');
     // filtered and ordered
     var steps = [];
-    slices.forEach(function(sl) {
-        sl.sort(function(a,b) { return a.ix < b.ix }).forEach(function st(st) {
-            if( !st.deleted )
-                steps.push(st);
-        })
-    });
+    slices.forEach(function(sl) { sl.forEach(function(st) { if( !st.deleted ) steps.push(st); }) });
+    steps.sort(function(a,b) { return a.ix < b.ix });
     var text = [steps.map(function(st) { return st.gcode.join('\n') }).join('\n'), epilogue].join("\n").trim();
     var filename = $("#filename").val();
     var blob = new Blob([text], { type: "text/plain" });//{type: "text/plain;charset=utf-8"});
     saveAs(blob, filename);
     // increment the rev after saving
     $("#filename").val(revName(filename));
-
 }
 
 
@@ -181,6 +176,7 @@ function badge(x, type) {
     return `<span class="badge${type}">${x}</span>`;
 }
 
+
 function isFiltered(step, type) {
     type = type || stepFilter;
     switch(type) {
@@ -214,6 +210,7 @@ function setFilter(type) {
 
 
 function setSliceNum(slicenum, stepnum) {
+    // negative slicenum means go to last matching 
     if(slicenum < 0 || slicenum > slices.length - 1) return;
     var steps = slices[slicenum];
     if(sliceNum !== slicenum) {
@@ -223,8 +220,7 @@ function setSliceNum(slicenum, stepnum) {
     // ensure stepnum is valid and unfiltered; if filtered, choose next unfiltered stepnum
     while( stepnum >= 0 && stepnum < steps.length && isFiltered(steps[stepnum]) )
         stepnum += Math.sign(stepnum-stepNum || 1);
-    if(stepnum >= 0 && stepnum < steps.length)
-        stepNum = stepnum;
+    stepNum = stepnum >= 0 && stepnum < steps.length ? stepnum : 0;
     var step = steps[stepNum];
     // if the only valid step is filtered, change the filter to All
     if( isFiltered(step) )
