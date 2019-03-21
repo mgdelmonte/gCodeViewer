@@ -143,7 +143,7 @@ function save(evt) {
     // filtered and ordered
     var steps = [];
     slices.forEach(function(sl) { sl.forEach(function(st) { if( !st.deleted ) steps.push(st); }) });
-    steps.sort(function(a,b) { return a.ix < b.ix });
+    steps.sort(function(a,b) { return a.ix-b.ix });
     var text = [steps.map(function(st) { return st.gcode.join('\n') }).join('\n'), epilogue].join("\n").trim();
     var filename = $("#filename").val();
     var blob = new Blob([text], { type: "text/plain" });//{type: "text/plain;charset=utf-8"});
@@ -228,7 +228,8 @@ function setSliceNum(slicenum, stepnum) {
     // ensure stepnum is valid and unfiltered; if filtered, choose next unfiltered stepnum
     while( stepnum >= 0 && stepnum < steps.length && isFiltered(steps[stepnum]) )
         stepnum += Math.sign(stepnum-stepNum || 1);
-    stepNum = stepnum >= 0 && stepnum < steps.length ? stepnum : 0;
+    if( stepnum >= 0 && stepnum < steps.length )
+        stepNum = stepnum;
     var step = steps[stepNum];
     // if the only valid step is filtered, change the filter to All
     if( isFiltered(step) )
@@ -576,6 +577,7 @@ function drawSlice(slicenum, stepnum) {
     ctx.lineJoin = "round";
     for(var i = 0; i < steps.length; i++) {
         var step = steps[i];
+        if( step.deleted ) continue;
         ctx.strokeStyle = i < stepnum ? "#888" : i == stepnum ? "#00f" : "#ccc";
         ctx.globalAlpha = 1;
         ctx.beginPath();
