@@ -35,6 +35,13 @@ function checkCapabilities() {
 }
 
 
+function autover() {
+    $.get(".git/logs/HEAD", function(d) {
+        var x = d.trim().split('\n').slice(-1)[0].split(' '); 
+        $('#version').text([x[1].slice(0,8), new Date(x[4]*1000).toLocaleString().replace(',','')].join(' '));
+    })
+}
+
 function init() {
     info = $('#info');
     if(!checkCapabilities()) return;
@@ -98,6 +105,7 @@ function init() {
     console.log("Application initialized");
     startCanvas();
     onResize();
+    autover();
 }
 
 function setProgress(pct) {
