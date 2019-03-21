@@ -306,14 +306,10 @@ function stepBounds(step) {
 function centerXform(obj, percent) {
     // returns a transform to scale and center an object with min and size, to fill a percentage of the canvas
     percent = percent || 0.9
-    // var scale = percent * (obj.size.x > obj.size.y ? canvas.width / obj.size.x : canvas.height / obj.size.y);
-    // var dx = -obj.min.x;// - obj.size.x/2;
-    // var dy = -obj.min.y;// - obj.size.y/2;
-    // return svg.createSVGMatrix().scale(scale).translate(dx, dy);//.translate(canvas.width/2, canvas.height/2);
-    var scale = percent * (obj.size.x > obj.size.y ? canvas.width / obj.size.x : canvas.height / obj.size.y);
-    // cap max scale at 1000
+    var scale = percent * Math.min(canvas.width/obj.size.x, canvas.height/obj.size.y);
+    // cap max scale
     // TODO better to set minimum feature size
-    if(scale > 1000) scale = 1000;
+    if(scale > 100) scale = 100;
     var dx = -obj.min.x + (canvas.width / scale - obj.size.x) / 2;
     var dy = -obj.min.y + (canvas.height / scale - obj.size.y) / 2;
     return svg.createSVGMatrix().scale(scale).translate(dx, dy);
@@ -344,7 +340,7 @@ function processMessage(e) {
             epilogue = data.msg.epilogue;
             slider.slider({ max: slices.length - 1 });
             //sliceNum = 0;
-            setSliceNum(0);
+            setSliceNum(0,0);
             onResize();
             break;
     }
