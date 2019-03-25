@@ -18,6 +18,7 @@ function parse(text) {
         seconds: 0,
         min: {},
         max: {},
+        speeds: {},
     };
     // record steps
     var steps = [];
@@ -105,7 +106,8 @@ function parse(text) {
                 // warn about z-moves during a line
                 if("z" in vals && vals.z != step.z)
                     console.warn(`doing z move at point ${step.moves.length}: ${cmd}`);
-                step.moves.push({ x: state.x, y: state.y, e: extruded, d:xyDistance });
+                step.moves.push({ x: state.x, y: state.y, e: extruded, d:xyDistance, s:state.speed });
+                state.speeds[state.speed] = state.speeds[state.speed]+1 || 1;
             }
         }
         // misc commands

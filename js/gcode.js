@@ -384,13 +384,19 @@ function startCanvas() {
     ctx = canvas.getContext('2d');
     // faster without alpha?
     //ctx = canvas.getContext('2d', {alpha:false});
-    // override transform function so it'll take a matrix
+    // override transform and setTransform functions to take a matrix
     (function() {
         var xf = ctx.transform;
         ctx.transform = function(a, b, c, d, e, f) {
             if(a instanceof SVGMatrix)
                 return xf.call(ctx, a.a, a.b, a.c, a.d, a.e, a.f);
             return xf.call(ctx, a, b, c, d, e, f);
+        }
+        var xf2 = ctx.setTransform;
+        ctx.setTransform = function(a, b, c, d, e, f) {
+            if(a instanceof SVGMatrix)
+                return xf2.call(ctx, a.a, a.b, a.c, a.d, a.e, a.f);
+            return xf2.call(ctx, a, b, c, d, e, f);
         }
     })();
     ctx.lineWidth = 1;
