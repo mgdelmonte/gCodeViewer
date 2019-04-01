@@ -69,7 +69,11 @@ function parse(text) {
             var extruded = vals.e ? (state.extrudeRelative ? vals.e : vals.e - state.e) : 0;
             if(!extruded && state.dcExtrude)
                 extruded = xyDistance;
-            // cannot extrude at z=0
+            // convert extrusion commands to relative
+            if( !state.extrudeRelative && 'e' in vals) {
+                step.gcode.push(step.gcode.pop().replace(/ e[0-9.-]+/i, ' E'+extruded.toFixed(4)));
+            }
+            // cannot extrude at z=0; not sure what this would mean
             if( state.z == 0 )
                 extruded = 0;
             // set step starting point if we're about to start a line
@@ -113,13 +117,15 @@ function parse(text) {
         // misc commands
         else if(/^M82|G90/i.test(cmd)) {
             state.extrudeRelative = false;
+            // we understand that the machine state is use absolute numbers for extrusion, but we convert extrusion to relative so we don't output this code
+            step.gcode.push('; omitting because we want relative extrusion: '+step.gcode.pop());
         } else if(/^M83|G81/i.test(cmd)) {
             state.extrudeRelative = true;
         } else if(/^M101/i.test(cmd)) {
             state.dcExtrude = true;
         } else if(/^M103/i.test(cmd)) {
             state.dcExtrude = false;
-            // things to worry about
+        // things to worry about
         } else if(/^G91/i.test(cmd)) {
             console.log("worry: " + line);
         }

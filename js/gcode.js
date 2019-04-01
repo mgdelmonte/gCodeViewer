@@ -288,14 +288,17 @@ function step() {
 function stepBounds(step) {
     step = step || slices[sliceNum][stepNum];
     var min = { x: step.x, y: step.y }, max = { x: step.x, y: step.y };
+    // TODO get dia from nozzle width
+    var dia = 0.8;
     // TEST get min/avg/max vpm (extruded vol/mm as a percent)
     // TODO cheating to get slice height (dz) this way; need to store in slice instead
     var dz = slices[1][0].z - slices[0][0].z;
-    // vpm is vol extruded (ve) / vol traversed (vt)
-    // ve is pi*dia*de
+    // vpm is extruded (ve) / vol traversed (vt)
+    // ve is pi*(dia/2)^2*de
     // vt for a line segment with rounded ends is ((pi*dia)+(dia*dx))*dz
     // but ignore line ends and assume extrusion is primed, which simplifies to dia*dx*dz
-    // and dia factors out
+    // so the ve/vt factor is
+    var vol_factor = (Math.PI*dia)/(4*dz); 
     var vpm = { min:Infinity, max:0 };
     var ve = 0, vt = 0;
     step.moves.forEach(function(m) {
@@ -306,12 +309,13 @@ function stepBounds(step) {
         if( m.e > 0 && m.d > 0 ) {
             ve += m.e;
             vt += m.d;
-            var vps = (Math.PI*m.e)/(m.d*dz)
+            // per-segment vpm
+            var vps = vol_factor*m.e/m.d;
             vpm.min = Math.min(vpm.min, vps);
             vpm.max = Math.max(vpm.max, vps);
         }
     });
-    vpm.avg = (Math.PI*ve)/(vt*dz);
+    vpm.avg = vol_factor*ve/vt;
     var size = { x: max.x - min.x, y: max.y - min.y }
     return { min: min, max: max, size: size, vpm:vpm };
 }
