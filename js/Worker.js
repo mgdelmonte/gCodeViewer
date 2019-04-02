@@ -20,6 +20,10 @@ function parse(text) {
         max: {},
         speeds: {},
     };
+    // get slicer-specific stuff
+    var m = text.match(/(?:nozzle|extruder).?(?:dia|diameter)\s*[=:,]\s*([\d.]+)/i);
+    // TODO warn on unknown nozzle dia?
+    state.nozzleDia = m ? Number(m[1]) : 0.4;
     // record steps
     var steps = [];
     var step;
@@ -115,10 +119,11 @@ function parse(text) {
             }
         }
         // misc commands
-        else if(/^M82|G90/i.test(cmd)) {
+        else if(/^M82/i.test(cmd)) {
             state.extrudeRelative = false;
-            // we understand that the machine state is use absolute numbers for extrusion, but we convert extrusion to relative so we don't output this code
-            step.gcode.push('; omitting because we want relative extrusion: '+step.gcode.pop());
+            // we understand that the machine state is now to use absolute numbers for extrusion;
+            // but we convert all extrusion to relative
+            step.gcode.push(step.gcode.pop().replace(/^M82/i, "M83")+" ; changed to M83 for relative extrusion");
         } else if(/^M83|G81/i.test(cmd)) {
             state.extrudeRelative = true;
         } else if(/^M101/i.test(cmd)) {

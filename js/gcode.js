@@ -288,8 +288,8 @@ function step() {
 function stepBounds(step) {
     step = step || slices[sliceNum][stepNum];
     var min = { x: step.x, y: step.y }, max = { x: step.x, y: step.y };
-    // TODO get dia from nozzle width
-    var dia = 0.8;
+    var dia = state.nozzleDia;
+    console.assert(dia);
     // TEST get min/avg/max vpm (extruded vol/mm as a percent)
     // TODO cheating to get slice height (dz) this way; need to store in slice instead
     var dz = slices[1][0].z - slices[0][0].z;
