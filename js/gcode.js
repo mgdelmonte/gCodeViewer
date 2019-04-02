@@ -51,6 +51,8 @@ function init() {
         lineNumbers: true,
         gutters: ['CodeMirror-linenumbers']
     });
+    //gcode.on("change", onChangeGcode);
+    gcode.on("cursorActivity", onCursorActivityGcode);
     $("#dropZone").on('dragover', onDragover).on('drop', onChangeFile);
     $('#file').on('change', onChangeFile);
     $("#saveas").click(save);
@@ -107,6 +109,15 @@ function init() {
     startCanvas();
     onResize();
     autover();
+}
+
+function onChangeGcode(inst, obj) {
+    console.log(inst, obj);
+}
+
+function onCursorActivityGcode(inst) {
+    if( slices.length && gcode.state.focused && /^G\d.*\sX[\d-].*\sY[\d-]/i.test(step().gcode[gcode.getCursor().line]) )
+        render();
 }
 
 function setProgress(pct) {
@@ -244,6 +255,9 @@ function setSliceNum(slicenum, stepnum) {
     sliderHandle.text(steps[0].z + 'mm');
     //$('#deleteStep').attr("disabled", stepNum == 0); // will eventually allow deleting first step
     $('#deleteStep').text(step.deleted ? "Restore" : "Delete");
+    if( zooming) {
+        ctx.setTransform(centerXform(stepBounds(step), 0.5));
+    }
     render();
     stepPills.html(steps.map(function(s, i) {
         if( isFiltered(s) ) return "";
@@ -280,14 +294,17 @@ function step() {
 function stepBounds(step) {
     step = step || slices[sliceNum][stepNum];
     var min = { x: step.x, y: step.y }, max = { x: step.x, y: step.y };
+    // TODO get dia from nozzle width
+    var dia = 0.8;
     // TEST get min/avg/max vpm (extruded vol/mm as a percent)
     // TODO cheating to get slice height (dz) this way; need to store in slice instead
     var dz = slices[1][0].z - slices[0][0].z;
-    // vpm is vol extruded (ve) / vol traversed (vt)
-    // ve is pi*dia*de
+    // vpm is extruded (ve) / vol traversed (vt)
+    // ve is pi*(dia/2)^2*de
     // vt for a line segment with rounded ends is ((pi*dia)+(dia*dx))*dz
     // but ignore line ends and assume extrusion is primed, which simplifies to dia*dx*dz
-    // and dia factors out
+    // so the ve/vt factor is
+    var vol_factor = (Math.PI*dia)/(4*dz); 
     var vpm = { min:Infinity, max:0 };
     var ve = 0, vt = 0;
     step.moves.forEach(function(m) {
@@ -298,12 +315,13 @@ function stepBounds(step) {
         if( m.e > 0 && m.d > 0 ) {
             ve += m.e;
             vt += m.d;
-            var vps = (Math.PI*m.e)/(m.d*dz)
+            // per-segment vpm
+            var vps = vol_factor*m.e/m.d;
             vpm.min = Math.min(vpm.min, vps);
             vpm.max = Math.max(vpm.max, vps);
         }
     });
-    vpm.avg = (Math.PI*ve)/(vt*dz);
+    vpm.avg = vol_factor*ve/vt;
     var size = { x: max.x - min.x, y: max.y - min.y }
     return { min: min, max: max, size: size, vpm:vpm };
 }
@@ -322,11 +340,15 @@ function centerXform(obj, percent) {
 }
 
 function autozoom() {
-    // zoom to show current step
-    if(!slices.length) return;
-    zoomXform = zoomXform ? null : centerXform(stepBounds(slices[sliceNum][stepNum]), 0.5);
-    cameraXform = null;
-    render();
+    // // zoom to show current step
+    // if(!slices.length) return;
+    // zoomXform = zoomXform ? null : centerXform(stepBounds(slices[sliceNum][stepNum]), 0.5);
+    // cameraXform = null;
+    if( zooming && modelXform )
+        ctx.setTransform(modelXform);
+    zooming = !zooming;
+    //render();
+    setSliceNum(sliceNum, stepNum);
 }
 
 function processMessage(e) {
@@ -357,8 +379,9 @@ function processMessage(e) {
 var canvas, ctx;
 var svg = document.createElementNS("http://www.w3.org/2000/svg", 'svg');
 var lastX = 0, lastY = 0, dragStart, dragged;
+var zooming = false;
 
-var modelXform, zoomXform, cameraXform;
+var modelXform;//, zoomXform, cameraXform;
 // got this from gcv0, which should be nozzle dia or actual extrusion width?
 // gcv0 uses lineWidth = (filamentDia * (nozzleDia / layerHeight) / (2 * zoomFactor)
 // but layerHeight is really AVERAGE layerheight, so it's nonsense
@@ -371,13 +394,19 @@ function startCanvas() {
     ctx = canvas.getContext('2d');
     // faster without alpha?
     //ctx = canvas.getContext('2d', {alpha:false});
-    // override transform function so it'll take a matrix
+    // override transform and setTransform functions to take a matrix
     (function() {
         var xf = ctx.transform;
         ctx.transform = function(a, b, c, d, e, f) {
             if(a instanceof SVGMatrix)
                 return xf.call(ctx, a.a, a.b, a.c, a.d, a.e, a.f);
             return xf.call(ctx, a, b, c, d, e, f);
+        }
+        var xf2 = ctx.setTransform;
+        ctx.setTransform = function(a, b, c, d, e, f) {
+            if(a instanceof SVGMatrix)
+                return xf2.call(ctx, a.a, a.b, a.c, a.d, a.e, a.f);
+            return xf2.call(ctx, a, b, c, d, e, f);
         }
     })();
     ctx.lineWidth = 1;
@@ -402,8 +431,9 @@ function startCanvas() {
         if(dragStart) {
             var pt = transformedPoint(lastX, lastY);
             //console.log("dragging from ", dragStart, " to ", pt);
-            if(!cameraXform) cameraXform = svg.createSVGMatrix();
-            cameraXform = cameraXform.translate(pt.x - dragStart.x, pt.y - dragStart.y);
+            //if(!cameraXform) cameraXform = svg.createSVGMatrix();
+            //cameraXform = cameraXform.translate(pt.x - dragStart.x, pt.y - dragStart.y);
+            ctx.translate(pt.x - dragStart.x, pt.y - dragStart.y);
             render();
         }
     }, false);
@@ -423,7 +453,7 @@ function startCanvas() {
     // };
     var handleScroll = function(evt) {
         var clicks = evt.detail < 0 || evt.wheelDelta > 0 ? 0.4 : -0.4;
-        if(clicks) zoom(clicks, evt.x, evt.y);
+        if(clicks) zoom(clicks, evt.offsetX, evt.offsetY);
         return evt.preventDefault() && false;
     };
     canvas.addEventListener('DOMMouseScroll', handleScroll, false);
@@ -446,9 +476,13 @@ function zoom(clicks, x, y) {
     y = y || canvas.height / 2;
     var pt = transformedPoint(x, y);
     // scale by 10% per delta
-    if(!cameraXform) cameraXform = svg.createSVGMatrix();
+    //if(!cameraXform) cameraXform = svg.createSVGMatrix();
     var factor = Math.pow(1.1, clicks);
-    cameraXform = cameraXform.translate(-pt.x, -pt.y).scale(factor).translate(pt.x, pt.y);
+    //cameraXform = cameraXform.translate(-pt.x, -pt.y).scale(factor).translate(pt.x, pt.y);
+    // console.log('zooming at',x,y,'(',pt.x,pt.y,') factor',factor);
+    ctx.translate(pt.x, pt.y);
+    ctx.scale(factor, factor);
+    ctx.translate(-pt.x, -pt.y);
     render();
 }
 
@@ -543,7 +577,9 @@ function onResize() {
     $('#slider').height(canvas.height - 50);
     // scale model to fill canvas and center it
     if(slices.length) {
+        zooming = false;
         modelXform = centerXform(state, 0.9);
+        ctx.setTransform(modelXform);
     }
     render();
 }
@@ -641,14 +677,10 @@ function drawSlice(slicenum, stepnum) {
 
 
 function render() {
+    ctx.save();
     ctx.resetTransform();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if(zoomXform)
-        ctx.transform(zoomXform);//.a, zoomXform.b, zoomXform.c, zoomXform.d, zoomXform.e, zoomXform.f);
-    else if(modelXform)
-        ctx.transform(modelXform);//.a, modelXform.b, modelXform.c, modelXform.d, modelXform.e, modelXform.f);
-    if(cameraXform)
-        ctx.transform(cameraXform);//.a, modelXform.b, modelXform.c, modelXform.d, modelXform.e, modelXform.f);
+    ctx.restore();
     if( $('#showgrid').prop('checked') )
         drawGrid();
     if(slices.length) {
@@ -657,6 +689,19 @@ function render() {
         ctx.lineWidth = 0.2;
         ctx.strokeRect(state.min.x, state.min.y, state.size.x, state.size.y);
         ctx.setLineDash([]);
+        drawSlice(sliceNum, stepNum);
+        // show current gcode cmd if focused
+        if( gcode.state.focused ) {
+            var cmd = step().gcode[gcode.getCursor().line];
+            var vals = {}
+            cmd.toLowerCase().split(/\s+/).slice(1).forEach(function(val) {
+                vals[val[0]] = Number(val.slice(1));
+            });
+            if( 'x' in vals && 'y' in vals ) {
+                ctx.lineWidth = 0.2;
+                ctx.strokeStyle = 'red';
+                drawCircle(vals.x, -vals.y, 2);
+            }
+        }
     }
-    drawSlice(sliceNum, stepNum);
 }
