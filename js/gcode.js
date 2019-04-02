@@ -95,6 +95,7 @@ function init() {
             case 70: setFilter(); break; // f
             case 90: case 101: case 12: autozoom(); break // z, 5, numpad 5, numpad 5 in numlock
             case 46: case 8: case 68: onDeleteStep(); break; // del, backspace, d
+            case 71: toggleGrid(); break;
             default: return;
         }
         // event.stopPropagation();
@@ -184,12 +185,17 @@ function badge(x, type) {
     return `<span class="badge${type}">${x}</span>`;
 }
 
+function toggleGrid() {
+    $('#showgrid').prop('checked', !$('#showgrid').prop('checked'));
+    render();
+}
+
 
 function isFiltered(step, type) {
     type = type || stepFilter;
     switch(type) {
         case "All": return step.deleted;
-        case "Warnings": return step.deleted || !step.warnings;
+        case "Warnings": return step.deleted || !step.warnings.length;
         case "Deleted": return !step.deleted;
     }
 }
@@ -241,7 +247,7 @@ function setSliceNum(slicenum, stepnum) {
     render();
     stepPills.html(steps.map(function(s, i) {
         if( isFiltered(s) ) return "";
-        var cl = s.warnings ? " label-warning" : "";
+        var cl = s.warnings.length ? " label-warning" : "";
         if(i == stepNum) cl += " active";
         return `<a sn=${i} href=# class="label${cl}">${s.filament.toFixed(2)}</a>`;
     }).join(' '));
@@ -257,7 +263,7 @@ function setSliceNum(slicenum, stepnum) {
             pill(`distance: ${step.distance.toFixed(2)}mm`),
             pill(`filament: ${step.filament.toFixed(2)}mm`),
             pill(`ev: ${(100*si.vpm.min).toFixed(2)} < ${(100*si.vpm.avg).toFixed(2)} < ${(100*si.vpm.max).toFixed(2)}`)
-        ].concat((step.warnings || []).map(function(w) { return pill("warning: "+w, "warning") })).join("\n"));
+        ].concat(step.warnings.map(function(w) { return pill("warning: "+w, "warning") })).join("\n"));
     }
     else
         info.html(`<span class="label label-info">Slice: ${sliceNum + 1} of ${slices.length}</span> (cleanup, no extrusion)`);
@@ -643,7 +649,8 @@ function render() {
         ctx.transform(modelXform);//.a, modelXform.b, modelXform.c, modelXform.d, modelXform.e, modelXform.f);
     if(cameraXform)
         ctx.transform(cameraXform);//.a, modelXform.b, modelXform.c, modelXform.d, modelXform.e, modelXform.f);
-    drawGrid();
+    if( $('#showgrid').prop('checked') )
+        drawGrid();
     if(slices.length) {
         ctx.setLineDash([3, 3]);
         ctx.strokeStyle = "#f00";

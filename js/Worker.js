@@ -14,6 +14,7 @@ function parse(text) {
         extrudeRelative: false,
         dcExtrude: false,
         speed: 0,
+        tool: 0,
         totalExtruded: 0,
         seconds: 0,
         min: {},
@@ -23,8 +24,7 @@ function parse(text) {
     var steps = [];
     var step;
     function addStep() {
-        // if(step) console.log(`step ${steps.length} z=${step.z} gcode=${step.gcode.length} moves=${step.moves.length}`);
-        step = steps[steps.push({ gcode: [], moves: [], filament:0, distance:0 }) - 1];
+        step = steps[steps.push({ gcode: [], moves: [], warnings: [], filament:0, distance:0 }) - 1];
     }
     addStep();
     // do text by lines
@@ -53,11 +53,11 @@ function parse(text) {
             if(/^G92/i.test(cmd)) {
                 // warn if setting any value other than e
                 if(Object.keys(vals).some(function(k) { return k != "e" }))
-                    console.warn("sets val other than e: " + cmd);
+                    step.warnings.push("sets val other than e: " + cmd);
                 if("e" in vals) {
                     // warn if setting e to any nonzero value when not extrudeRelative
                     if(!state.extrudeRelative && vals.e != 0)
-                        console.warn("setting e with non-relative extrusion: " + cmd);
+                        step.warnings.push("setting e with non-relative extrusion: " + cmd);
                     state.e = vals.e;
                 }
                 return;
@@ -83,7 +83,8 @@ function parse(text) {
             if("z" in vals) state.z = vals.z;
             if("f" in vals) state.speed = vals.f;
             if(!state.extrudeRelative && "e" in vals) state.e = vals.e;
-            // negative extrusion, or zero extrusion plus a z-move, after a line ends a step
+            // after a line is started, any negative extrusion or no extrusion plus a z-move ends the step
+            // (z-move during a line is a disaster that is included in the step with a warning)
             if((extruded < 0 || (extruded==0 && moved.z)) && step.moves.length) {
                 addStep();
             }
@@ -103,9 +104,9 @@ function parse(text) {
                     state.max.z = 'z' in state.max ? Math.max(state.max.z, state.z) : state.z;
                 }
                 // warn about z-moves during a line
-                if("z" in vals && vals.z != step.z)
-                    console.warn(`doing z move at point ${step.moves.length}: ${cmd}`);
-                step.moves.push({ x: state.x, y: state.y, e: extruded, d:xyDistance });
+                if(moved.z)
+                    step.warnings.push(`doing z-move at point ${step.moves.length}: ${cmd}`);
+                step.moves.push({ x: state.x, y: state.y, e: extruded, d:xyDistance, speed:state.speed });
             }
         }
         // misc commands
@@ -119,7 +120,11 @@ function parse(text) {
             state.dcExtrude = false;
             // things to worry about
         } else if(/^G91/i.test(cmd)) {
-            console.log("worry: " + line);
+            step.warnings.push('relative positioning not yet supported; line is '+line);
+        } else if(/^T/i.test(cmd)) {
+            state.tool = Number(cmd.slice(1));
+            if(state.tool)
+                step.warnings.push("tool change not yet supported; line is "+line);
         }
     });
     // index steps by slice; retain ordering and do some analysis
@@ -130,15 +135,14 @@ function parse(text) {
         if( !s.moves.length ) {
             if( ix != steps.length-1 ) {
                 // no moves on anything but the last step is a warning
-                console.warn(`step ${ix+1} of ${steps.length} has no moves`);
-                s.warnings = (s.warnings || []).concat(['step has no moves']);
+                s.warnings.push('step has no moves');
             } else {
                 epilogue = s.gcode.join('\n');
                 return;
             }
         }
         if( s.filament < 1 )
-            s.warnings = ['<1mm extruded'];
+            s.warnings.push('<1mm extruded');
         s.ix = ix;
         if(!(s.z in zs)) zs[s.z] = [];
         zs[s.z].push(s);
